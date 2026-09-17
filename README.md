@@ -135,8 +135,10 @@ one you want, don't use it. That's a completely reasonable position.
 - No account to make, no telemetry, nothing about you to sell.
 
 If it saved you from a bad game and you feel like buying me a coffee, there's
-a **Sponsor** button at the top of this page. Entirely optional — nothing in
-the app is gated behind it, and nothing ever will be.
+a **Sponsor** button at the top of this page — it goes through GitHub
+Sponsors, and one-off tips are fine. Entirely optional. Nothing in the app is
+gated behind it, no sponsor gets a feature you don't, and that will not
+change.
 
 ---
 

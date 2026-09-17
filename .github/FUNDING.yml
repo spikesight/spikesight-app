@@ -1,15 +1,10 @@
 # Puts a "Sponsor" button at the top of the repo.
 #
-# GitHub Sponsors has to be enabled on the account first:
-#   github.com/settings/sponsors  (identity + payout details via Stripe)
-# Until that is live the button will not appear, and the entry below does
-# nothing. Everything here is optional - SpikeSight is free either way.
+# The button only appears once GitHub Sponsors is live on the account - until
+# then GitHub ignores this and nothing is shown, which is the behaviour we
+# want while the application is pending.
+#
+# SpikeSight is free regardless. Nothing in the app is ever gated behind this,
+# and nothing ever will be.
 
 github: [spikesight]
-thanks_dev: u/gh/spikesight
-
-# If you'd rather take tips from people who don't have a GitHub account,
-# uncomment one of these once the account exists. Ko-fi tends to suit players
-# better than developer-facing platforms.
-# ko_fi: spikesight
-# buy_me_a_coffee: spikesight
