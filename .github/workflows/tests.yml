@@ -1,0 +1,38 @@
+# Runs the test suite on every push, so a broken commit is obvious long before
+# anyone tags a release.
+#
+# The release workflow runs these too, but only on a tag - which is how a
+# missing data file once got as far as a tagged build before anything
+# complained.
+
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run the tests
+        run: python -m unittest discover tests
+
+      # Cheap, and it catches a file that exists locally but was never
+      # committed - which is exactly what broke the first release.
+      - name: Check the build has everything it needs
+        run: python -c "import sys; sys.path.insert(0, '.'); from tools.build_exe import check_inputs; check_inputs(); print('build inputs present')"
