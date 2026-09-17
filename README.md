@@ -15,6 +15,14 @@ nothing.
 
 ---
 
+**Contents** · [What it does](#what-it-does) · [Is this safe to use?](#is-this-safe-to-use)
+· [Free, and staying that way](#free-and-staying-that-way) · [Install](#install)
+· [Options](#options) · [Performance](#does-it-affect-performance)
+· [Verifying the download](#verifying-the-download)
+· [Building it yourself](#building-it-yourself) · [License](#license)
+
+---
+
 ## What it does
 
 The moment you load into agent select, SpikeSight shows you the lobby:
@@ -95,7 +103,8 @@ your account.
 | **No injection** | Nothing is injected into VALORANT. No game memory is read or written. No DLLs, no hooks, no overlay drawn inside the game process. |
 | **No automation** | It cannot queue, dodge, hover, lock an agent, send a message, join a party, or change any setting on your account. Not "it doesn't" — there is no function that does it. |
 | **No input simulation** | It never moves your mouse or presses keys. The one keyboard shortcut is registered with Windows the normal way; it is not a keyboard hook and sees nothing else you type. |
-| **Stays local** | No telemetry, no accounts, no server. Your notes are a SQLite file in `%LOCALAPPDATA%\SpikeSight`. Nothing is uploaded anywhere, by anyone, ever. |
+| **Stays local** | No telemetry, no account, no server of mine. Your notes are a SQLite file in `%LOCALAPPDATA%\SpikeSight`, and nothing about you or your matches is uploaded anywhere, ever. |
+| **One outbound request** | SpikeSight asks GitHub whether a newer release exists, at most every few hours. It sends the version you're on and nothing else — no account, no match data, no identifier — and it never downloads or installs anything by itself. Switch it off in Settings and the request is never made. |
 
 ### It respects other players' privacy settings
 
@@ -176,6 +185,7 @@ All off by default unless noted:
 | **Theme** | Dark, Light, or follow Windows. |
 | **Density** | Compact, Comfortable or Large. |
 | **Fetch recent-match stats** | Powers the K/D column and part of the smurf score. Turning it off makes SpikeSight much lighter. |
+| **Tell me when there's a new version** *(on)* | Shows a bar when a newer release exists. It never installs anything — the download is your click. |
 
 ---
 

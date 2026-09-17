@@ -127,6 +127,35 @@
     });
   }
 
+  /* ---------------- update check ---------------- */
+
+  // Shows a bar when a newer release exists. Dismissing it is remembered per
+  // version, so saying "not now" does not mean "never tell me again".
+  async function checkForUpdate() {
+    let info = null;
+    try {
+      info = await api("/api/update");
+    } catch { return; }
+    if (!info.updateAvailable || !info.latest) return;
+
+    let dismissed = null;
+    try { dismissed = localStorage.getItem("spikesight.dismissedUpdate"); } catch { /* ignore */ }
+    if (dismissed === info.latest) return;
+
+    const bar = $("updateBar");
+    const text = $("updateText");
+    text.replaceChildren();
+    text.append("SpikeSight ");
+    text.append(el("b", null, String(info.latest).replace(/^v/, "")));
+    text.append(` is available — you have ${info.current}.`);
+    $("updateLink").href = info.url;
+    $("updateDismiss").addEventListener("click", () => {
+      bar.classList.add("hidden");
+      try { localStorage.setItem("spikesight.dismissedUpdate", info.latest); } catch { /* ignore */ }
+    });
+    bar.classList.remove("hidden");
+  }
+
   /* ---------------- transport ---------------- */
 
   let socket = null;
@@ -1152,6 +1181,11 @@ Not lifetime, and not this act.`;
   // usual here: these change how the app behaves when it is not in front of
   // you. Rows with choices render as a dropdown instead of a checkbox.
   const SETTING_ROWS = [
+    ["checkForUpdates", "Tell me when there's a new version",
+      "Asks GitHub once every few hours whether a newer release exists, and "
+      + "shows a bar at the top if there is. It sends nothing about you or "
+      + "your matches, and it never downloads or installs anything - that is "
+      + "still your click. Off means the request is never made."],
     ["minimizeDuringMatch", "Minimize after agent select",
       "Hides the window when the match starts and brings it back at the end. "
       + "Off, because the enemy team only appears once the match begins and "
@@ -1614,6 +1648,7 @@ Not lifetime, and not this act.`;
     initTheme();
     // #history / #encounters opens straight to that tab.
     switchView(location.hash.replace("#", "") || "lobby");
+    checkForUpdate();
     try { state.meta = await api("/api/meta"); } catch { /* non-fatal */ }
     try {
       const initial = await api("/api/state");

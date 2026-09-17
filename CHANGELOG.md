@@ -9,6 +9,21 @@ The version you are running is shown at the top of the gear panel.
 
 ---
 
+## 2.2 — It tells you when there's a new one
+
+### Added
+
+- **Update notice.** SpikeSight now checks whether a newer release exists and
+  shows a bar at the top if there is, with a link to it. No more finding out
+  months later that you're four versions behind.
+
+It asks GitHub at most once every few hours, sends nothing but the version
+you're on, and **never downloads or installs anything on its own** — clicking
+through is your call. There's a switch for it in Settings, and turning it off
+means the request is never made at all.
+
+---
+
 ## 2.1 — Now called SpikeSight
 
 ### Changed

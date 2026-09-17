@@ -23,7 +23,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__, paths
-from . import autostart, changelog, perfcheck, shortcut
+from . import autostart, changelog, perfcheck, shortcut, updates
 from .config import WRITABLE_SETTINGS, Config, load_config, save_user_settings
 from .notes import SEVERITIES, SUGGESTED_TAGS
 from .poller import Poller
@@ -120,6 +120,7 @@ def create_app(cfg: Config | None = None, demo: bool = False) -> FastAPI:
     app.state.overlay_metrics = None
     # Move mode, and the window it moves. The window is attached by the
     # desktop session; without one (--no-window, tests) moving is refused.
+    app.state.updates = updates.UpdateCheck(__version__)
     app.state.overlay_edit = False
     app.state.overlay_window = None
     app.state.loop = None
@@ -282,6 +283,16 @@ def create_app(cfg: Config | None = None, demo: bool = False) -> FastAPI:
             raise HTTPException(500, str(exc)) from exc
         return {"ok": True, "path": str(created)}
 
+    @app.get("/api/update")
+    async def update_check(force: bool = False):
+        """Whether a newer release exists. Never downloads anything."""
+        if not cfg.get("app.check_for_updates", True):
+            return {
+                "current": __version__, "latest": None, "updateAvailable": False,
+                "url": updates.RELEASES_PAGE, "disabled": True,
+            }
+        return {**await app.state.updates.check(force=force), "disabled": False}
+
     @app.get("/api/changelog")
     async def changelog_endpoint():
         return {"version": __version__, "releases": changelog.load()}
@@ -355,6 +366,7 @@ def create_app(cfg: Config | None = None, demo: bool = False) -> FastAPI:
         "minimizeToTray": "tray.minimize_to_tray",
         "closeToTray": "tray.close_to_tray",
         "startWithWindows": "app.start_with_windows",
+        "checkForUpdates": "app.check_for_updates",
         "minimizeDuringMatch": "app.minimize_during_match",
         "theme": "ui.theme",
         "overlay": "overlay.enabled",

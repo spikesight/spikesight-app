@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import httpx
 import sqlite3
 import sys
 import tempfile
@@ -1126,6 +1127,57 @@ class TestLegacyDataMigration(unittest.TestCase):
             with mock.patch.object(paths, "LEGACY_DATA_DIR", legacy),                  mock.patch.object(paths, "DATA_DIR", new),                  mock.patch.object(paths, "MATCH_CACHE_DIR", new / "matchcache"):
                 self.assertFalse(paths.migrate_legacy_data())
             self.assertEqual((new / "notes.sqlite3").read_bytes(), b"newer, mine")
+
+
+class TestUpdateCheck(unittest.TestCase):
+    def test_version_comparison(self):
+        from spikesight.updates import is_newer
+
+        self.assertTrue(is_newer("v2.2", "2.1"))
+        self.assertTrue(is_newer("v2.1.1", "2.1"))
+        self.assertTrue(is_newer("v10.0", "2.9"))
+        self.assertFalse(is_newer("v2.1", "2.1"))
+        self.assertFalse(is_newer("v2.0.9", "2.1"))
+        # Anything unparseable means "no update", never a false alarm.
+        self.assertFalse(is_newer(None, "2.1"))
+        self.assertFalse(is_newer("nightly", "2.1"))
+        self.assertFalse(is_newer("v2.2", None))
+
+    def test_a_failed_check_is_silent_and_claims_nothing(self):
+        from spikesight import updates
+
+        check = updates.UpdateCheck("2.1")
+        with mock.patch("httpx.AsyncClient.get", side_effect=httpx.ConnectError("offline")):
+            result = asyncio.run(check.check())
+        self.assertFalse(result["updateAvailable"])
+        self.assertIsNone(result["latest"])
+        self.assertEqual(result["current"], "2.1")
+
+    def test_the_answer_is_cached(self):
+        from spikesight import updates
+
+        check = updates.UpdateCheck("2.1")
+        payload = mock.Mock(status_code=200)
+        payload.json.return_value = {"tag_name": "v2.5", "html_url": "https://example.test"}
+        with mock.patch("httpx.AsyncClient.get", return_value=payload) as get:
+            first = asyncio.run(check.check())
+            second = asyncio.run(check.check())
+        self.assertTrue(first["updateAvailable"])
+        self.assertEqual(second, first)
+        self.assertEqual(get.call_count, 1, "a second look must not hit the network")
+
+    def test_switching_it_off_makes_no_request(self):
+        from fastapi.testclient import TestClient
+
+        from spikesight.server import create_app
+
+        cfg = Config(copy.deepcopy(DEFAULTS))
+        cfg.set("app.check_for_updates", False)
+        with TestClient(create_app(cfg, demo=True)) as client,              mock.patch("httpx.AsyncClient.get") as get:
+            body = client.get("/api/update").json()
+        self.assertTrue(body["disabled"])
+        self.assertFalse(body["updateAvailable"])
+        get.assert_not_called()
 
 
 class TestOverlayTopmost(unittest.TestCase):

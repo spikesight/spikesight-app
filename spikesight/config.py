@@ -24,6 +24,10 @@ DEFAULTS: dict[str, Any] = {
         "open_browser": True,
         # Launch SpikeSight when you sign in to Windows. Off unless asked for.
         "start_with_windows": False,
+        # Ask GitHub whether a newer release exists, and say so if there is
+        # one. Nothing is sent and nothing is downloaded - see
+        # spikesight/updates.py. Off means no request is ever made.
+        "check_for_updates": True,
         # Minimize the window once agent select ends. Off by default: the
         # scoreboard is at its most useful in a live match, where the enemy
         # team is finally visible. It is here for people who would rather
@@ -229,6 +233,7 @@ def _fraction(value):
 WRITABLE_SETTINGS = {
     "app.start_with_windows": bool,
     "app.minimize_during_match": bool,
+    "app.check_for_updates": bool,
     "tray.minimize_to_tray": bool,
     "tray.close_to_tray": bool,
     "stats.enable_deep_stats": bool,
