@@ -9,6 +9,19 @@ The version you are running is shown at the top of the gear panel.
 
 ---
 
+## 2.2.1
+
+### Fixed
+
+- **The extra blank window sitting in the taskbar.** The overlay's window was
+  visible for a moment while it started up, which was long enough for Windows
+  to give it its own taskbar button — and that button then stuck around for as
+  long as the app was running. It's taken off the taskbar properly now, and
+  claimed the instant it appears instead of a beat later. The overlay page
+  also has an icon now, so it can't turn up as an anonymous globe.
+
+---
+
 ## 2.2 — It tells you when there's a new one
 
 ### Added

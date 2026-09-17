@@ -25,6 +25,12 @@ sticky once set, so it survives being hidden between matches - and if it is
 ever missing when the panel is needed, the window is thrown away and made
 again rather than shown where nobody can see it.
 
+The window is also kept off the taskbar. ``WS_EX_TOOLWINDOW`` stops a
+button being created, but Windows has already made one by the time a
+window we did not create exists, so the button is removed explicitly
+through ``ITaskbarList`` as well - otherwise a mystery second icon sits
+there for as long as the app runs.
+
 The window uses a browser profile of its own. Sharing the main window's would
 make Chromium hand the launch to the process that already owns that profile,
 leaving us with no process to close - and a click-through, always-on-top
@@ -66,6 +72,10 @@ REBUILD_COOLDOWN = 15.0
 #: paint there before it slides into view. Showing a Chromium window that has
 #: not painted yet means a grey box with a title bar on it for a moment, which
 #: looks broken; off screen, nobody sees that happen.
+#: How long to wait for a freshly launched window to appear before giving up
+#: and letting the caller's loop retry.
+ADOPT_WAIT = 5.0
+
 OFFSCREEN = -32000
 WARMUP_SECONDS = 0.35
 #: Give up waiting for the page to report its size and show it anyway.
@@ -280,6 +290,67 @@ def position_from(
     )
 
 
+CLSID_TASKBARLIST = "{56FDF344-FD6D-11D0-958A-006097C9A090}"
+IID_ITASKBARLIST = "{56FDF342-FD6D-11D0-958A-006097C9A090}"
+CLSCTX_INPROC_SERVER = 1
+_HRINIT, _DELETETAB, _RELEASE = 3, 5, 2
+
+
+class _GUID(ctypes.Structure):
+    _fields_ = [
+        ("Data1", wintypes.DWORD),
+        ("Data2", wintypes.WORD),
+        ("Data3", wintypes.WORD),
+        ("Data4", ctypes.c_byte * 8),
+    ]
+
+
+def _guid(text: str) -> _GUID:
+    value = _GUID()
+    ctypes.windll.ole32.CLSIDFromString(text, ctypes.byref(value))
+    return value
+
+
+def _com_call(interface, slot: int, *args, argtypes=()) -> int:
+    vtable = ctypes.cast(interface, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p)))[0]
+    prototype = ctypes.WINFUNCTYPE(ctypes.HRESULT, ctypes.c_void_p, *argtypes)
+    return prototype(vtable[slot])(interface, *args)
+
+
+def remove_from_taskbar(hwnd) -> None:
+    """Take an existing taskbar button away.
+
+    The tool-window style prevents a button; this removes the one Windows
+    made before we could set it. Failure is not worth reporting: the worst
+    case is a spare icon, and the app still works.
+    """
+    if _user32 is None:
+        return
+    ole32 = ctypes.windll.ole32
+    ole32.CoInitialize(None)
+    taskbar = ctypes.c_void_p()
+    try:
+        created = ole32.CoCreateInstance(
+            ctypes.byref(_guid(CLSID_TASKBARLIST)), None, CLSCTX_INPROC_SERVER,
+            ctypes.byref(_guid(IID_ITASKBARLIST)), ctypes.byref(taskbar),
+        )
+        if created != 0 or not taskbar:
+            return
+        _com_call(taskbar, _HRINIT)
+        _com_call(taskbar, _DELETETAB, wintypes.HWND(hwnd), argtypes=(wintypes.HWND,))
+    except OSError:
+        log.debug("Could not remove the overlay's taskbar button", exc_info=True)
+    finally:
+        if taskbar:
+            vtable = ctypes.cast(
+                taskbar, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p))
+            )[0]
+            ctypes.WINFUNCTYPE(ctypes.c_ulong, ctypes.c_void_p)(
+                vtable[_RELEASE]
+            )(taskbar)
+        ole32.CoUninitialize()
+
+
 def is_topmost(hwnd) -> bool:
     return bool(_user32.GetWindowLongPtrW(hwnd, GWL_EXSTYLE) & WS_EX_TOPMOST)
 
@@ -439,6 +510,16 @@ class OverlayWindow:
             self._launched_at = time.monotonic()
             log.info("Overlay window starting (%s).", exe[0])
 
+            # Take it over the moment it appears rather than waiting for the
+            # next pass of the caller's loop: until it is adopted it is a
+            # visible, unstyled browser window sitting in the taskbar.
+            deadline = time.monotonic() + ADOPT_WAIT
+            while time.monotonic() < deadline and not self._hwnd:
+                self._adopt()
+                if self._hwnd:
+                    break
+                time.sleep(0.05)
+
     def _adopt(self) -> None:
         """Find the window once it has a title, and make it an overlay."""
         if self._hwnd and _user32.IsWindow(self._hwnd):
@@ -455,6 +536,9 @@ class OverlayWindow:
             # Now or never: this only works while the window is new.
             topmost = _claim_topmost(hwnd)
             _user32.ShowWindow(hwnd, SW_HIDE)
+        # The style stops a *new* button; this removes the one that already
+        # exists, because the window was briefly visible while starting.
+        remove_from_taskbar(hwnd)
         self._hwnd = hwnd
         self._visible = False
         if topmost:
