@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>SpikeSight Overlay</title>
+<link rel="stylesheet" href="/static/styles.css" />
+<link rel="stylesheet" href="/static/overlay.css" />
+<script src="/static/theme.js"></script>
+</head>
+<body class="overlay-body">
+<div id="panel" class="ov">
+  <div class="ov-move" id="ovMove" hidden>
+    <span class="ov-move-grip">&#10021;</span>
+    <span class="ov-move-text">Drag to move</span>
+    <button type="button" class="ov-move-btn" id="ovReset">Reset</button>
+    <button type="button" class="ov-move-btn primary" id="ovDone">Done</button>
+  </div>
+  <header class="ov-head">
+    <span class="ov-brand"><span class="brand-mark">SPIKE</span><span class="brand-rest">SIGHT</span></span>
+    <span class="ov-match" id="ovMatch">Agent select</span>
+  </header>
+
+  <section class="ov-team" id="ovTeam"></section>
+
+  <section class="ov-pool" id="ovPool">
+    <div class="ov-section-head">
+      <span>Your top agents</span>
+      <span class="ov-scope" id="ovScope"></span>
+    </div>
+    <div id="ovPoolRows" class="ov-pool-rows"></div>
+  </section>
+
+  <footer class="ov-foot" id="ovFoot">Ctrl+Shift+O hides this until the next match</footer>
+</div>
+<script src="/static/overlay.js"></script>
+</body>
+</html>

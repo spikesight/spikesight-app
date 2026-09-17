@@ -1,0 +1,75 @@
+# Builds the release on GitHub's own machines and publishes it.
+#
+# The point is that nobody has to trust a binary somebody uploaded from their
+# desktop. GitHub builds it from the tagged source, signs a provenance
+# attestation saying exactly which commit and which workflow produced the
+# file, and anyone can check that with `gh attestation verify`. That is a much
+# stronger answer to "is this safe" than a virus scan, which can only say that
+# nothing recognised it.
+#
+# Tag a release to run it:  git tag v2.0.1 && git push origin v2.0.1
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write        # create the release
+  id-token: write        # sign the provenance attestation
+  attestations: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Run the tests
+        run: python -m unittest discover tests
+
+      - name: Build
+        run: python tools/build_exe.py
+
+      - name: Attest that this workflow built these files
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: dist/SpikeSight-*-windows.zip
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $zip = (Get-ChildItem dist/SpikeSight-*-windows.zip)[0]
+          $sum = (Get-Content dist/SHA256SUMS.txt).Split(' ')[0]
+          $notes = @"
+          ### Verifying this download
+
+          ``````
+          Get-FileHash .\$($zip.Name) -Algorithm SHA256
+          ``````
+
+          Should print ``$sum``.
+
+          Built by GitHub Actions from ``$env:GITHUB_SHA``. To check that
+          cryptographically rather than taking this file's word for it:
+
+          ``````
+          gh attestation verify .\$($zip.Name) --repo $env:GITHUB_REPOSITORY
+          ``````
+          "@
+          gh release create $env:GITHUB_REF_NAME $zip dist/SHA256SUMS.txt `
+            --title $env:GITHUB_REF_NAME --notes $notes

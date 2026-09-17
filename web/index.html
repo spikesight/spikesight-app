@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SpikeSight</title>
+<link rel="stylesheet" href="/static/styles.css" />
+<script src="/static/theme.js"></script>
+<link rel="icon" type="image/png" href="/static/assets/icon.png" />
+</head>
+<body>
+
+<div class="header-stack">
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">SPIKE</span><span class="brand-rest">SIGHT</span>
+  </div>
+
+  <div class="state-block">
+    <span id="statePill" class="pill pill-idle">Starting</span>
+    <span id="matchLine" class="match-line">Waiting for the Riot Client&hellip;</span>
+  </div>
+
+  <div class="topbar-actions">
+    <label class="switch" title="Color theme. System follows your Windows setting.">
+      <span>Theme</span>
+      <select id="themeSelect">
+        <option value="dark">Dark</option>
+        <option value="light">Light</option>
+        <option value="system">System</option>
+      </select>
+    </label>
+    <label class="switch" title="Row height and text size">
+      <span>Density</span>
+      <select id="densitySelect">
+        <option value="compact">Compact</option>
+        <option value="comfortable">Comfortable</option>
+        <option value="large">Large</option>
+      </select>
+    </label>
+    <button id="btnRefresh" class="btn" type="button">Refresh</button>
+    <button id="btnDiag" class="btn btn-ghost" type="button" title="Settings and diagnostics">&#9881;</button>
+    <span id="connDot" class="conn-dot" title="Disconnected"></span>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button class="tab is-active" type="button" data-view="lobby">Lobby</button>
+  <button class="tab" type="button" data-view="history">History</button>
+  <button class="tab" type="button" data-view="encounters">Encounters</button>
+  <span class="tab-hint" id="tabHint"></span>
+</nav>
+</div>
+
+<!-- Lobby --------------------------------------------------------------- -->
+<section id="view-lobby" class="view">
+  <div id="alerts" class="alerts"></div>
+
+  <section id="winprob" class="winprob hidden">
+    <div class="winprob-head">
+      <div class="wp-side wp-ally">
+        <span class="wp-pct" id="wpAllyPct">50%</span>
+        <span class="wp-label" id="wpAllyLabel">Your team</span>
+      </div>
+      <div class="wp-title">
+        <span>Estimated win probability</span>
+        <span class="wp-note" id="wpNote"></span>
+      </div>
+      <div class="wp-side wp-enemy">
+        <span class="wp-pct" id="wpEnemyPct">50%</span>
+        <span class="wp-label" id="wpEnemyLabel">Enemy team</span>
+      </div>
+    </div>
+    <div class="wp-bar"><div class="wp-fill" id="wpFill" style="width:50%"></div></div>
+  </section>
+
+  <main id="board" class="board">
+    <div class="empty">
+      <h2>No lobby yet</h2>
+      <p>SpikeSight watches your local Riot Client. Queue up and the scoreboard
+        appears the moment agent select loads.</p>
+    </div>
+  </main>
+</section>
+
+<!-- History ------------------------------------------------------------- -->
+<section id="view-history" class="view hidden">
+  <div class="view-head">
+    <h2>Your recent matches</h2>
+    <button id="historyRefresh" class="btn" type="button">Refresh</button>
+  </div>
+  <div id="historyBody" class="view-body">
+    <p class="muted">Loading&hellip;</p>
+  </div>
+</section>
+
+<!-- Encounters ---------------------------------------------------------- -->
+<section id="view-encounters" class="view hidden">
+  <div class="view-head">
+    <h2>Players you have met</h2>
+    <input id="encSearch" class="text-input" type="search"
+           placeholder="Search name, tag or note text&hellip;" />
+    <select id="encSort" title="Sort order">
+      <option value="count">Most encounters</option>
+      <option value="recent">Most recent</option>
+      <option value="severity">Flag severity</option>
+      <option value="name">Name</option>
+    </select>
+    <label class="switch">
+      <input type="checkbox" id="encFlagged" />
+      <span>Flagged only</span>
+    </label>
+  </div>
+  <div id="encountersBody" class="view-body">
+    <p class="muted">Loading&hellip;</p>
+  </div>
+</section>
+
+<footer class="footer">
+  <span id="progress" class="progress"></span>
+  <span class="foot-legend" title="Solid: confirmed by a live party id. Striped: inferred from recent matches.">
+    <span class="legend-chip"></span> confirmed party
+    <span class="legend-chip likely"></span> likely party
+  </span>
+  <span class="foot-note">
+    Read-only. Local client APIs only. Streamer Mode and hidden-level settings
+    are always respected. Not affiliated with Riot Games.
+  </span>
+</footer>
+
+<!-- Player drawer ------------------------------------------------------- -->
+<aside id="drawer" class="drawer" aria-hidden="true">
+  <div class="drawer-head">
+    <div>
+      <h2 id="drawerName">Player</h2>
+      <p id="drawerSub" class="drawer-sub"></p>
+    </div>
+    <div class="drawer-head-actions">
+      <a id="drawerTracker" class="btn btn-link hidden" target="_blank"
+         rel="noopener noreferrer">tracker.gg &#8599;</a>
+      <button id="drawerClose" class="btn btn-ghost" type="button">&times;</button>
+    </div>
+  </div>
+  <div class="drawer-body">
+    <section class="card">
+      <h3>Flag this player</h3>
+      <div class="severity-row" id="severityRow"></div>
+      <div class="tag-row" id="tagRow"></div>
+      <textarea id="noteBody" rows="3" maxlength="2000"
+        placeholder="What happened? e.g. threw round 9 after losing a duel, refused to swap off."></textarea>
+      <div class="drawer-actions">
+        <button id="saveNote" class="btn btn-primary" type="button">Save flag</button>
+        <span id="noteStatus" class="note-status"></span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h3>Existing flags</h3>
+      <div id="existingNotes" class="note-list"><p class="muted">None yet.</p></div>
+    </section>
+
+    <section class="card">
+      <h3>Encounter history</h3>
+      <div id="encounterList" class="encounter-list"><p class="muted">Loading&hellip;</p></div>
+    </section>
+
+    <section class="card" id="drawerStatsCard">
+      <h3>Recent matches</h3>
+      <div id="drawerStats"><p class="muted">No stats fetched.</p></div>
+    </section>
+
+    <section class="card" id="drawerPrivacyCard">
+      <h3>Privacy</h3>
+      <div id="drawerPrivacy"></div>
+    </section>
+  </div>
+</aside>
+
+<!-- Modal --------------------------------------------------------------- -->
+<div id="modal" class="modal" aria-hidden="true">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h2 id="modalTitle">Settings</h2>
+      <button id="modalClose" class="btn btn-ghost" type="button">&times;</button>
+    </div>
+    <div class="modal-body" id="modalBody"></div>
+  </div>
+</div>
+
+<div id="scrim" class="scrim"></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
