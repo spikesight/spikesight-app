@@ -1,9 +1,13 @@
 __pycache__/
 *.pyc
+*.spec
 .venv/
-config.toml
-data/
-*.log
 dist/
 build/
-*.spec
+*.log
+
+# Runtime state, if the app is ever pointed at the project folder. Anchored to
+# the root on purpose: an unanchored "data/" also matches spikesight/data/,
+# which is the bundled agent and map tables the app cannot start without.
+/config.toml
+/data/

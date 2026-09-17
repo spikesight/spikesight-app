@@ -37,9 +37,9 @@ The moment you load into agent select, SpikeSight shows you the lobby:
 
 ### Your own notes on players
 
-The part Tracker.gg doesn't have. Flag anyone as **Watch**, **Avoid** or
-**Dodge**, with tags and a note. Next time they show up, the flag is on the
-board while the dodge window is still open.
+Flag anyone as **Watch**, **Avoid** or **Dodge**, with tags and a note. Next
+time they show up, the flag is on the board while the dodge window is still
+open.
 
 ![Everyone you have played with](docs/screenshots/encounters.png)
 
@@ -47,6 +47,10 @@ Every completed match is recorded, so you also get a running count of how many
 times you've met someone and whether they were with you or against you. A
 roster is only logged once the match actually starts — a lobby you dodged was
 never an encounter.
+
+Any player whose riot ID is visible has a one-click link out to their full
+stats on tracker.gg, for when you want the deep dive. Players in Streamer Mode
+get no link, because SpikeSight never resolves their name in the first place.
 
 ### The pre-match overlay
 
@@ -119,6 +123,20 @@ game — and that it does nothing the official client doesn't do already.
 
 Use it at your own risk, as you would any third-party tool. If that risk isn't
 one you want, don't use it. That's a completely reasonable position.
+
+---
+
+## Free, and staying that way
+
+- **No ads. Ever.** Not in the app, not in the overlay, not anywhere.
+- **No premium tier, no subscription, no "pro" unlock.** Everything it does,
+  it does for everybody. There is no paid version to upsell you to, and there
+  never will be.
+- No account to make, no telemetry, nothing about you to sell.
+
+If it saved you from a bad game and you feel like buying me a coffee, there's
+a **Sponsor** button at the top of this page. Entirely optional — nothing in
+the app is gated behind it, and nothing ever will be.
 
 ---
 
@@ -200,8 +218,8 @@ read it, and [build it yourself](#building-it-yourself).
 Requires Python 3.11+ on Windows.
 
 ```powershell
-git clone https://github.com/<you>/spikesight.git
-cd spikesight
+git clone https://github.com/spikesight/spikesight-app.git
+cd spikesight-app
 python -m venv .venv
 .\.venv\Scripts\pip install -r requirements.txt
 .\.venv\Scripts\python -m spikesight

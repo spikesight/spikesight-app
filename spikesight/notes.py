@@ -1,8 +1,7 @@
 """Local player notes and encounter history.
 
-This is the feature Tracker.gg does not have: a private, local record of who
-was a problem, surfaced the instant they show up in a lobby again - while the
-dodge window is still open.
+A private, local record of who was a problem, surfaced the instant they show
+up in a lobby again - while the dodge window is still open.
 
 Everything lives in one SQLite file under %LOCALAPPDATA%\\SpikeSight. Nothing is
 uploaded anywhere, and notes are keyed on puuid so they still work for players

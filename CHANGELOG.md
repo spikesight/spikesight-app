@@ -13,8 +13,8 @@ The version you are running is shown at the top of the gear panel.
 
 ### Changed
 
-- **ValScout is now SpikeSight.** There's already an app called Valorant
-  Scout, and the two names were close enough to be a problem.
+- **ValScout is now SpikeSight.** The old name was close enough to another
+  app's to cause confusion.
 - **Your stuff comes with you.** Flags, encounters, settings and the match
   cache are copied over the first time you run it. Nothing is deleted — the
   old folder is left exactly as it was, so check everything's there and then
