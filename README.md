@@ -1,8 +1,10 @@
 <div align="center">
 
-# SpikeSight
+<img src="docs/brand/social-preview.png"
+     alt="SpikeSight — know who you're playing with, before the match starts"
+     width="860">
 
-**Know who you're playing with, before the match starts.**
+# SpikeSight
 
 A read-only VALORANT lobby scout for Windows. Ranks, peak ranks, recent form,
 party detection, smurf flags, and a private record of players who ruined your
