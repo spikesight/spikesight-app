@@ -1525,10 +1525,15 @@ class _StubRemote:
 class _StubStats:
     cached_matches = 0
 
-    async def collect(self, puuids, progress=None):
+    def __init__(self):
+        self.collect_calls = 0
+
+    async def collect(self, puuids, progress=None, lobby_queue=""):
+        self.collect_calls += 1
         return StatsResult(
-            players={p: PlayerStats(puuid=p) for p in puuids},
-            co_party={}, matches_examined=0, matches_fetched=0,
+            players={p: PlayerStats(puuid=p, matches=5, kills=50, deaths=40)
+                     for p in puuids},
+            co_party={}, co_parties={}, matches_examined=5, matches_fetched=5,
         )
 
 
@@ -1666,6 +1671,40 @@ class TestScoreboard(unittest.IsolatedAsyncioTestCase):
                 if player["puuid"] == puuid:
                     return player
         raise AssertionError(f"{puuid} missing from snapshot")
+
+    async def test_a_roster_refresh_keeps_the_stats_it_already_fetched(self):
+        """Agent select rebuilds the roster every few seconds as people lock
+        in. Those rebuilds are cheap ones that fetch no stats, and they used
+        to wipe the recent form fetched at the start - so K/D, ACS and the
+        form pips vanished for the rest of the lobby."""
+        remote = _StubRemote({"me": _mmr_payload(self.ACT_ID, 17, 40)}, {})
+        stats = _StubStats()
+        builder = ScoreboardBuilder(remote, self._content(), _StubNotes(), stats, cfg())
+
+        deep = await builder.build(state="INGAME", match_payload=self._payload(),
+                                   self_puuid="me", deep=True)
+        self.assertEqual(self._find(deep, "me")["stats"]["matches"], 5)
+        self.assertEqual(deep["phase"], "enriched")
+
+        quick = await builder.build(state="INGAME", match_payload=self._payload(),
+                                    self_puuid="me", deep=False)
+        self.assertIsNotNone(self._find(quick, "me")["stats"],
+                             "the refresh threw away the stats")
+        self.assertEqual(self._find(quick, "me")["stats"]["matches"], 5)
+        # Reused, not re-fetched: no extra requests to Riot.
+        self.assertEqual(stats.collect_calls, 1)
+
+    async def test_a_different_lobby_does_not_inherit_the_last_one_s_stats(self):
+        remote = _StubRemote({"me": _mmr_payload(self.ACT_ID, 17, 40)}, {})
+        stats = _StubStats()
+        builder = ScoreboardBuilder(remote, self._content(), _StubNotes(), stats, cfg())
+
+        await builder.build(state="INGAME", match_payload=self._payload(),
+                            self_puuid="me", deep=True)
+        other = dict(self._payload(), MatchID="match-2")
+        quick = await builder.build(state="INGAME", match_payload=other,
+                                    self_puuid="me", deep=False)
+        self.assertIsNone(self._find(quick, "me")["stats"])
 
     async def test_teams_are_split_and_sorted(self):
         _, snapshot = await self._build()

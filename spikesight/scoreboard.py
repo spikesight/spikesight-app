@@ -60,6 +60,9 @@ class ScoreboardBuilder:
         self._content = content
         self._notes = notes_store
         self._stats = stats_engine
+        #: (match id, result) from the last deep build, reused by the quick
+        #: rebuilds that happen while the same lobby is still on screen.
+        self._last_stats: tuple[str, object] | None = None
         self._cfg = cfg
         self._last_recorded_match: str | None = None
 
@@ -226,11 +229,20 @@ class ScoreboardBuilder:
             slot.flags = slot.flags.merge(privacy.flags_from_mmr(slot.mmr))
             slot.name_record = name_records.get(slot.puuid)
 
+        # Agent select refreshes the roster every few seconds as people lock
+        # in, and each refresh is a *quick* build. Without this, the recent
+        # form fetched once at the start would be thrown away seconds later
+        # and the K/D column, the ACS, the form pips and the inferred parties
+        # would all blink out for the rest of the lobby.
+        match_id = meta.get("id", "")
         stats_result = None
         if deep and self._cfg.get("stats.enable_deep_stats", True):
             stats_result = await self._stats.collect(
                 puuids, progress=progress, lobby_queue=meta.get("queue", "")
             )
+            self._last_stats = (match_id, stats_result)
+        elif self._last_stats and match_id and self._last_stats[0] == match_id:
+            stats_result = self._last_stats[1]
 
         teams: dict[str, list[str]] = {}
         for slot in slots:

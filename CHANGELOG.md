@@ -9,6 +9,20 @@ The version you are running is shown at the top of the gear panel.
 
 ---
 
+## 2.2.2
+
+### Fixed
+
+- **K/D, ACS and the win/loss pips going missing in a real lobby.** Agent
+  select refreshes the roster every few seconds as people lock in, and each
+  refresh was throwing away the recent-form stats fetched when the lobby
+  loaded. They'd show up for a second or two and then vanish for the rest of
+  the lobby. They now survive the refresh, without re-fetching anything.
+- Same cause: parties that were worked out from shared match history — rather
+  than seen live — kept disappearing too.
+
+---
+
 ## 2.2.1
 
 ### Fixed
