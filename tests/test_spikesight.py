@@ -35,7 +35,9 @@ from spikesight.scoreboard import (  # noqa: E402
     ScoreboardBuilder,
     _match_label,
     _mode_name,
+    is_lobby,
 )
+from spikesight import stats as stats_module  # noqa: E402
 from spikesight.stats import PlayerStats, StatsResult, _summarise_match  # noqa: E402
 
 
@@ -484,6 +486,141 @@ class TestModeLabels(unittest.TestCase):
         self.assertTrue(_match_label("", "/Game/GameModes/Foo/FooGameMode.FooGameMode_C",
                                      "Matchmaking"))
         self.assertEqual(_mode_name(""), "")
+
+
+class TestSessionsWorthScouting(unittest.TestCase):
+    """Patch 13.06 lets you practise in the Range while you queue, so the
+    client reporting "in a game" no longer means there is a lobby to read."""
+
+    def test_sitting_in_the_range_is_not_a_lobby(self):
+        self.assertFalse(is_lobby({"Players": [{"Subject": "me"}]}))
+
+    def test_neither_is_a_session_with_no_players_at_all(self):
+        self.assertFalse(is_lobby({}))
+        self.assertFalse(is_lobby({"Players": None}))
+
+    def test_a_real_match_still_is(self):
+        self.assertTrue(
+            is_lobby({"Players": [{"Subject": "me"}, {"Subject": "them"}]})
+        )
+
+
+class TestQueueingFromTheRange(unittest.IsolatedAsyncioTestCase):
+    """The other half of the 13.06 Range change: the polling loop has to act
+    on it, not just be able to recognise it."""
+
+    async def _poll_a_session(self, players: list[dict]):
+        from spikesight.poller import Poller
+
+        published: list[dict] = []
+
+        async def emit(message):
+            published.append(message)
+
+        with mock.patch("spikesight.poller.NotesStore"):
+            poller = Poller(cfg(), emit)
+
+        remote = mock.AsyncMock()
+        remote.coregame_match.return_value = {"MatchID": "s1", "Players": players}
+        poller.remote = remote
+        poller.builder = mock.AsyncMock()
+        poller.builder.build.return_value = {"state": "INGAME", "teams": []}
+        poller._presence_snapshot = mock.AsyncMock(return_value=({}, {}))
+
+        await poller._scan("INGAME", "s1", fresh=True)
+        if poller._enrich_task is not None:
+            poller._enrich_task.cancel()  # background enrichment, not the point here
+        return poller, published
+
+    async def test_the_range_does_not_become_a_lobby(self):
+        poller, published = await self._poll_a_session([{"Subject": "me"}])
+
+        poller.builder.build.assert_not_awaited()
+        self.assertEqual(published[-1]["snapshot"]["state"], "MENUS")
+        self.assertIn("queue up", published[-1]["snapshot"]["message"])
+
+    async def test_a_real_match_is_still_scanned(self):
+        poller, _ = await self._poll_a_session(
+            [{"Subject": "me"}, {"Subject": "them"}]
+        )
+        poller.builder.build.assert_awaited()
+
+
+class TestScoringMetricChanges(unittest.TestCase):
+    """13.06 replaced ACS with Performance Score in the game's own UI. If the
+    field behind our ACS column ever changes with it, that has to be loud."""
+
+    def setUp(self):
+        stats_module._seen_fields.clear()
+        stats_module._scoring_warned = False
+
+    def _finished_match(self, score_per_round: int) -> dict:
+        return {
+            "matchId": "m1",
+            "completed": True,
+            "players": [
+                {"s": f"p{i}", "t": "Blue", "p": "", "c": "", "ct": 0,
+                 "k": 15, "d": 15, "a": 5, "r": 20, "sc": score_per_round * 20}
+                for i in range(10)
+            ],
+        }
+
+    def _payload_with(self, **extra) -> dict:
+        return {
+            "matchInfo": {"matchId": "m1", "gameStartMillis": 1},
+            "players": [
+                {"subject": f"p{i}", "teamId": "Blue",
+                 "stats": {"kills": 1, "deaths": 1, "assists": 0,
+                           "roundsPlayed": 20, "score": 4000},
+                 **extra}
+                for i in range(2)
+            ],
+        }
+
+    def test_a_field_we_have_never_seen_is_logged_once(self):
+        payload = self._payload_with()
+        for player in payload["players"]:
+            player["stats"]["performanceScore"] = 312
+        with self.assertLogs("spikesight.stats", level="INFO") as logged:
+            _summarise_match(payload)
+        self.assertIn("performanceScore", "\n".join(logged.output))
+
+        # Ten players a match, fifty matches a lobby: say it once.
+        with mock.patch.object(stats_module.log, "info") as info:
+            _summarise_match(payload)
+        info.assert_not_called()
+
+    def test_the_per_round_scores_object_is_watched_too(self):
+        """13.06 stages new metrics in ``scores`` rather than ``stats``, which
+        is where Performance Score is most likely to turn up."""
+        payload = self._payload_with(scores={"TempValueH": 332.4})
+        with self.assertLogs("spikesight.stats", level="INFO") as logged:
+            _summarise_match(payload)
+        output = "\n".join(logged.output)
+        self.assertIn("TempValueH", output)
+        self.assertIn("scores", output)
+
+    def test_scores_that_no_longer_look_like_combat_score_are_flagged(self):
+        # A 0-500 per-match number over 20 rounds reads as an ACS of ~17.
+        with self.assertLogs("spikesight.stats", level="WARNING") as logged:
+            stats_module._check_scoring_still_means_what_we_think(
+                self._finished_match(17)
+            )
+        self.assertIn("scoring field has changed", "\n".join(logged.output))
+
+    def test_an_ordinary_match_says_nothing(self):
+        with mock.patch.object(stats_module.log, "warning") as warned:
+            stats_module._check_scoring_still_means_what_we_think(
+                self._finished_match(220)
+            )
+        warned.assert_not_called()
+
+    def test_a_short_or_empty_match_proves_nothing(self):
+        thin = self._finished_match(17)
+        thin["players"] = thin["players"][:3]
+        with mock.patch.object(stats_module.log, "warning") as warned:
+            stats_module._check_scoring_still_means_what_we_think(thin)
+        warned.assert_not_called()
 
 
 class TestStatsSummary(unittest.TestCase):
@@ -1671,6 +1808,32 @@ class TestScoreboard(unittest.IsolatedAsyncioTestCase):
                 if player["puuid"] == puuid:
                     return player
         raise AssertionError(f"{puuid} missing from snapshot")
+
+    async def test_a_lobby_that_is_not_two_teams_gets_no_odds(self):
+        """Gauntlet puts eight duos in one session. Everyone who is not on
+        your team then lands on the other side of the board, and a
+        rank-weighted chance to win against fourteen people is a number that
+        means nothing."""
+        payload = self._payload()
+        payload["Players"] = [
+            {"Subject": "me", "TeamID": "Blue", "CharacterID": "agent1",
+             "PlayerIdentity": {"AccountLevel": 100}, "SeasonalBadgeInfo": {"Rank": 0}},
+        ] + [
+            {"Subject": f"other{i}", "TeamID": f"Team{i}", "CharacterID": "agent2",
+             "PlayerIdentity": {"AccountLevel": 50}, "SeasonalBadgeInfo": {"Rank": 0}}
+            for i in range(14)
+        ]
+        remote = _StubRemote({"me": _mmr_payload(self.ACT_ID, 17, 40)}, {})
+        snapshot = await self._builder(remote).build(
+            state="INGAME", match_payload=payload, self_puuid="me", deep=False,
+        )
+        self.assertIsNone(snapshot["winProbability"])
+        self.assertEqual(snapshot["teams"][1]["label"], "Everyone else")
+
+    async def test_an_ordinary_lobby_still_gets_odds(self):
+        _, snapshot = await self._build()
+        self.assertIsNotNone(snapshot["winProbability"])
+        self.assertEqual(snapshot["teams"][1]["label"], "Enemy team")
 
     async def test_a_roster_refresh_keeps_the_stats_it_already_fetched(self):
         """Agent select rebuilds the roster every few seconds as people lock

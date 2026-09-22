@@ -127,10 +127,20 @@ class RemoteClient:
         if response.status_code in (401, 403):
             raise AuthExpired(f"{method} {url} -> {response.status_code}")
         if response.status_code >= 400:
-            raise RemoteError(
+            error = RemoteError(
                 f"{method} {url} -> {response.status_code} {response.text[:200]}",
                 response.status_code,
             )
+            if response.status_code == 400:
+                # Riot checks X-Riot-ClientVersion, and ours is whatever the
+                # last VALORANT session wrote to its log. The morning after a
+                # patch that is yesterday's build, and every request is
+                # refused until the game has been launched once on the new one.
+                error.hint = (
+                    "If VALORANT just updated, launch the game once so "
+                    "SpikeSight can read the new build number."
+                )
+            raise error
         if not response.content:
             return None
         try:

@@ -24,6 +24,72 @@ from .errors import RemoteError, SpikeSightError
 
 log = logging.getLogger(__name__)
 
+#: The fields a player's match record has always carried, by the object they
+#: live in. ``stats`` holds match totals; ``scores`` mostly holds the same
+#: figures divided by rounds played, and as of 13.06 it is also where Riot is
+#: staging new metrics under placeholder names.
+#:
+#: One of those placeholders is already identified: **``scores.TempValueF`` is
+#: Performance Score**, the 0-500 number 13.06 put on the game's own scoreboard
+#: in place of ACS. It is a whole-match figure rather than a per-round one, and
+#: it was pinned down twice over - it is the only field besides ACS whose
+#: ordering puts the match MVP and both team MVPs on top, and its value matched
+#: the score the end-of-game screen showed (352.7 against a reported 353).
+#: Nothing reads it yet. When something does, treat the name as temporary:
+#: prefer a real one if Riot ever ships it, and sanity-check the 0-500 range,
+#: because a placeholder can be repurposed without warning.
+#:
+#: Anything unfamiliar in either object is worth a line in the log - said once,
+#: then never again.
+_KNOWN_FIELDS = {
+    "stats": frozenset({
+        "score", "roundsPlayed", "kills", "deaths", "assists",
+        "playtimeMillis", "abilityCasts",
+    }),
+    "scores": frozenset(),
+}
+_seen_fields: set[tuple[str, str]] = set()
+
+#: ACS is combat score divided by rounds played, which only means anything
+#: while ``score`` is the running total it has always been. A finished match
+#: full of players averaging less than this per round is not a lobby of very
+#: bad players - it is ``score`` having quietly become a different metric.
+_MIN_PLAUSIBLE_ACS = 25
+_scoring_warned = False
+
+
+def _note_new_fields(group: str, record: dict) -> None:
+    fresh = {
+        name for name in record
+        if name not in _KNOWN_FIELDS.get(group, frozenset())
+        and (group, name) not in _seen_fields
+    }
+    if fresh:
+        _seen_fields.update((group, name) for name in fresh)
+        log.info("Fields in match %s we do not read: %s", group, ", ".join(sorted(fresh)))
+
+
+def _check_scoring_still_means_what_we_think(summary: dict) -> None:
+    """Shout if ``score`` stops being cumulative combat score.
+
+    A silently wrong number on the board is worse than a missing one, and a
+    scoring change would land in the on-disk cache and stay there.
+    """
+    global _scoring_warned
+    if _scoring_warned or not summary.get("completed"):
+        return
+    played = [row for row in summary["players"] if row["r"] >= 10]
+    if len(played) < 6:
+        return  # a short or half-empty match proves nothing
+    best = max(row["sc"] / row["r"] for row in played)
+    if best < _MIN_PLAUSIBLE_ACS:
+        _scoring_warned = True
+        log.warning(
+            "Match %s scores look like a different metric (best %.0f per round). "
+            "The ACS column is probably wrong - the scoring field has changed.",
+            summary["matchId"][:8], best,
+        )
+
 
 @dataclass
 class MatchLine:
@@ -146,6 +212,8 @@ def _summarise_match(payload: dict) -> dict | None:
         if not isinstance(entry, dict) or entry.get("isObserver"):
             continue
         stats = entry.get("stats") or {}
+        _note_new_fields("stats", stats)
+        _note_new_fields("scores", entry.get("scores") or {})
         players.append(
             {
                 "s": str(entry.get("subject") or ""),
@@ -217,6 +285,7 @@ class StatsEngine:
             summary = _summarise_match(payload)
             if summary is None:
                 return None
+            _check_scoring_still_means_what_we_think(summary)
             if summary.get("completed"):
                 self._cache.put(match_id, summary)
             return summary

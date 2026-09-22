@@ -9,6 +9,36 @@ The version you are running is shown at the top of the gear panel.
 
 ---
 
+## 2.2.3 — Keeping up with patch 13.06
+
+VALORANT 13.06 moved a few things under SpikeSight's feet. This keeps up with
+them.
+
+One it hasn't followed yet: 13.06 replaced ACS with Performance Score on the
+game's own scoreboard. SpikeSight's ACS column still reads the field it always
+has, and is unchanged. If that field ever changes meaning, the app now says so
+in its log rather than quietly showing you a wrong number.
+
+### Fixed
+
+- **Queueing from the Range no longer empties the board.** 13.06 lets you
+  practise while you wait for a match, and the client counts that as being in
+  a game — so SpikeSight went looking for a lobby and found one player, you.
+  It now waits until there's actually somebody to scout.
+- **No more win chance for lobbies that aren't two teams.** In a mode that
+  puts several teams in one match, everyone who isn't on your side ends up on
+  the other side of the board, and "your 2 vs their 14" is not a matchup. The
+  board says "Everyone else" and skips the odds.
+- **A plain reason when Riot stops answering.** A run of refused requests used
+  to leave a red dot over yesterday's lobby, which looks exactly like an app
+  that has frozen. It now says what happened — including the likeliest cause
+  the morning after a patch, which is that VALORANT needs launching once
+  before SpikeSight can read the new build number.
+- **"Nobody is signed in yet"** in place of an internal-looking error, for
+  when the Riot Client is open but you haven't logged in.
+
+---
+
 ## 2.2.2
 
 ### Fixed

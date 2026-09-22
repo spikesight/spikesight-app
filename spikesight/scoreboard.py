@@ -31,6 +31,23 @@ STATE_PREGAME = "PREGAME"
 STATE_INGAME = "INGAME"
 
 
+#: Above this, the two sides are not two teams playing each other, and a
+#: rank-weighted "chance to win" would be nonsense dressed up as a number.
+MAX_TEAM_SIZE = 5
+
+
+def is_lobby(coregame_payload: dict) -> bool:
+    """Is this live session actually a lobby, or just us on our own?
+
+    The Range runs on a game server like any match does, so the client reports
+    it as being in a game. Since 13.06 you can practise in there while you
+    queue, which makes "in a game with nobody else in it" a normal thing to be
+    rather than a curiosity - and there is nobody in it to scout.
+    """
+    players = [p for p in coregame_payload.get("Players") or [] if isinstance(p, dict)]
+    return len(players) >= 2
+
+
 def _iso_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -278,7 +295,11 @@ class ScoreboardBuilder:
         enemy = [p for p in players if p["side"] == "enemy"]
 
         probability = None
-        if enemy:
+        # Modes that put more than two teams in one session - Gauntlet's eight
+        # duos, say - arrive here as "us and everybody else", which is not a
+        # matchup and must not be presented as odds.
+        two_teams = len(ally) <= MAX_TEAM_SIZE and len(enemy) <= MAX_TEAM_SIZE
+        if enemy and two_teams:
             probability = winprob.estimate(
                 cfg=self._cfg,
                 ally=[{"points": p["ratingPoints"], "kd": (p["stats"] or {}).get("kd")}
@@ -306,7 +327,11 @@ class ScoreboardBuilder:
             "winProbability": probability.to_dict() if probability else None,
             "teams": [
                 {"side": "ally", "label": "Your team", "players": ally},
-                {"side": "enemy", "label": "Enemy team", "players": enemy},
+                {
+                    "side": "enemy",
+                    "label": "Enemy team" if two_teams else "Everyone else",
+                    "players": enemy,
+                },
             ],
             "alerts": _build_alerts(players, state),
             "stats": {
@@ -531,6 +556,7 @@ _MODE_MATCHES = [
     ("snowball", "Snowball Fight"),
     ("hurm", "Team Deathmatch"),
     ("newmap", "New Map"),
+    ("gauntlet", "Gauntlet"),
     ("bomb", "Standard"),
 ]
 

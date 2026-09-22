@@ -173,7 +173,18 @@ class LocalClient:
         return response.json()
 
     async def credentials(self) -> Credentials:
-        data = await self.get_json("/entitlements/v1/token")
+        try:
+            data = await self.get_json("/entitlements/v1/token")
+        except ClientNotRunning:
+            raise
+        except SpikeSightError as exc:
+            # The client only serves this once somebody is signed in. Sitting
+            # at the login screen with the client already open is normal -
+            # never more so than on patch day, waiting for a download.
+            raise ClientNotRunning(
+                "The Riot Client is running, but nobody is signed in yet.",
+                hint="Sign in and this will connect on its own.",
+            ) from exc
         if not isinstance(data, dict) or not data.get("accessToken"):
             raise ClientNotRunning("Local client has no signed-in session yet.")
         return Credentials(

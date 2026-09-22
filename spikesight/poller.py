@@ -30,6 +30,9 @@ Emit = Callable[[dict], Awaitable[None]]
 
 #: How often to re-check glz when presence is unavailable.
 BLIND_DETECT_INTERVAL = 12.0
+#: Consecutive failed polls before the board is replaced with the reason. One
+#: failure is usually a token rotating; a run of them is Riot saying no.
+FAILURES_BEFORE_SPEAKING_UP = 3
 #: Your own matches read for the overlay's top-agents panel. Deep enough that
 #: a single map has something to say: spread over the map pool, 20 games is
 #: two per map. Details are cached on disk forever, so this is paid once.
@@ -71,6 +74,7 @@ class Poller:
         self._history_lock = asyncio.Lock()
         self._agent_pool: tuple[tuple[str, str], float, dict] | None = None
         self._last_blind_detect = 0.0
+        self._failures = 0
         self._enrich_task: asyncio.Task | None = None
         self._task: asyncio.Task | None = None
         self._wake = asyncio.Event()
@@ -164,13 +168,24 @@ class Poller:
             try:
                 await self._connect()
                 delay = await self._tick()
+                self._failures = 0
             except ClientNotRunning as exc:
                 self.connection = {"connected": False, "message": str(exc), "hint": exc.hint}
                 await self._publish(_idle_snapshot("DISCONNECTED", str(exc)))
                 delay = idle
             except (RemoteError, SpikeSightError) as exc:
                 log.warning("Poll failed: %s", exc)
-                self.connection = {"connected": False, "message": str(exc)}
+                self.connection = {
+                    "connected": False, "message": str(exc), "hint": exc.hint,
+                }
+                self._failures += 1
+                if self._failures == FAILURES_BEFORE_SPEAKING_UP:
+                    # Riot refusing everything looks exactly like an app that
+                    # has frozen. Say what happened rather than leaving a red
+                    # dot over yesterday's board.
+                    await self._publish(
+                        _idle_snapshot("DISCONNECTED", exc.hint or str(exc))
+                    )
                 delay = idle
             except asyncio.CancelledError:
                 raise
@@ -259,6 +274,13 @@ class Poller:
             payload = await self.remote.coregame_match(match_id)
 
         if not isinstance(payload, dict):
+            return
+
+        if state == scoreboard.STATE_INGAME and not scoreboard.is_lobby(payload):
+            # The Range, most likely - see scoreboard.is_lobby. The match id
+            # stays on record so the loop does not keep asking about it, and
+            # the board says "in menus", which is what it is worth.
+            await self._publish(self._menus_snapshot())
             return
 
         party_hints, presence_names = await self._presence_snapshot()
