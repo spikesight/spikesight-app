@@ -14,10 +14,14 @@ The version you are running is shown at the top of the gear panel.
 VALORANT 13.06 moved a few things under SpikeSight's feet. This keeps up with
 them.
 
-One it hasn't followed yet: 13.06 replaced ACS with Performance Score on the
-game's own scoreboard. SpikeSight's ACS column still reads the field it always
-has, and is unchanged. If that field ever changes meaning, the app now says so
-in its log rather than quietly showing you a wrong number.
+### Added
+
+- **Performance Score, next to ACS.** 13.06 replaced ACS with Performance
+  Score on the game's own scoreboard. SpikeSight shows both, because "200 ACS"
+  means something to everyone and the new number doesn't mean anything to
+  anyone yet. ACS stays the number on the board; hover a player's K/D, or a
+  match in your history, for the Performance Score behind it. Your own last
+  few matches average it too.
 
 ### Fixed
 

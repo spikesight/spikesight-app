@@ -187,6 +187,10 @@ async def build(
                 "assists": (row or {}).get("a"),
                 "rounds": rounds,
                 "acs": int(round(score / rounds)) if rounds else None,
+                "performance": (
+                    None if (row or {}).get("ps") is None
+                    else int(round(row["ps"]))
+                ),
                 "kd": round(kills / max(1, deaths), 2) if kills is not None else None,
                 "rrEarned": update.earned if update else None,
                 "rrAfter": update.rr_after if update else None,
@@ -209,6 +213,7 @@ async def build(
     total_score = sum(
         (m["acs"] or 0) * (m["rounds"] or 0) for m in matches
     )
+    scored = [m["performance"] for m in matches if m["performance"] is not None]
 
     summary_block = {
         "matches": len(matches),
@@ -219,6 +224,8 @@ async def build(
         "deaths": total_deaths,
         "kd": round(total_kills / max(1, total_deaths), 2) if total_deaths else None,
         "acs": int(round(total_score / total_rounds)) if total_rounds else None,
+        "performance": int(round(sum(scored) / len(scored))) if scored else None,
+        "performanceMatches": len(scored),
         "rrNet": sum(m["rrEarned"] or 0 for m in ranked) if ranked else None,
         "rankedMatches": len(ranked),
         "bestRR": max((m["rrEarned"] for m in ranked), default=None),

@@ -130,6 +130,10 @@ def _player(
             "kd": kd,
             "kda": round(kd + 0.4, 2),
             "acs": acs,
+            # Roughly the ratio real matches show. Synthetic, like the rest
+            # of the demo - it only has to look like a plausible board.
+            "performance": min(500, int(round(acs * 1.18))),
+            "performanceMatches": 5,
             "kills": int(kd * 60),
             "deaths": 60,
             "assists": 22,
@@ -141,7 +145,8 @@ def _player(
                 {"matchId": f"{puuid}-{i}", "startedMs": 1788000000000 - i * 86400000,
                  "queue": "competitive", "mapId": "/Game/Maps/Ascent/Ascent",
                  "won": i % 2 == 0, "kills": 18 + i, "deaths": 15, "assists": 5,
-                 "rounds": 22, "score": acs * 22, "characterId": "", "tier": tier}
+                 "rounds": 22, "score": acs * 22, "characterId": "", "tier": tier,
+                 "performance": min(500, int(round(acs * 1.18)) + (i - 2) * 9)}
                 for i in range(5)
             ],
         },
@@ -339,7 +344,8 @@ def build_history(count: int = 15) -> dict:
             "roundsLost": rng.randint(4, 11) if won else 13,
             "kills": kills, "deaths": deaths, "assists": rng.randint(2, 9),
             "rounds": rng.randint(16, 25),
-            "acs": rng.randint(140, 290),
+            "acs": (match_acs := rng.randint(140, 290)),
+            "performance": min(500, int(round(match_acs * 1.18))),
             "kd": round(kills / max(1, deaths), 2),
             "rrEarned": earned, "rrAfter": rr, "tierAfter": tier,
             "rank": ranks.tier_dict(tier, rr),
@@ -370,6 +376,7 @@ def build_history(count: int = 15) -> dict:
             "kills": sum(m["kills"] for m in matches),
             "deaths": sum(m["deaths"] for m in matches),
             "kd": 1.14, "acs": 218,
+            "performance": 257, "performanceMatches": len(matches),
             "rrNet": sum(m["rrEarned"] for m in matches),
             "rankedMatches": len(matches),
             "bestRR": max(m["rrEarned"] for m in matches),

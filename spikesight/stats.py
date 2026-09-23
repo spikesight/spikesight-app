@@ -57,6 +57,25 @@ _seen_fields: set[tuple[str, str]] = set()
 _MIN_PLAUSIBLE_ACS = 25
 _scoring_warned = False
 
+#: Where Performance Score is read from, best name first. ``TempValueF`` is
+#: Riot's placeholder and works today; the real name goes first so the day it
+#: ships nothing needs changing.
+_PERFORMANCE_FIELDS = ("performanceScore", "TempValueF")
+#: Riot describes Performance Score as a 0-500 number. A placeholder field can
+#: be repurposed without warning, so a value outside that is treated as "this
+#: is no longer the thing we thought" rather than shown.
+_PERFORMANCE_MAX = 500.0
+
+
+def _performance_score(scores: dict) -> float | None:
+    """The match's Performance Score, if this payload carries one."""
+    for name in _PERFORMANCE_FIELDS:
+        value = scores.get(name)
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            if 0.0 <= float(value) <= _PERFORMANCE_MAX:
+                return float(value)
+    return None
+
 
 def _note_new_fields(group: str, record: dict) -> None:
     fresh = {
@@ -105,6 +124,8 @@ class MatchLine:
     score: int
     character_id: str
     competitive_tier: int
+    #: Performance Score for this match, when the payload had one.
+    performance: float | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -120,6 +141,9 @@ class MatchLine:
             "score": self.score,
             "characterId": self.character_id,
             "tier": self.competitive_tier,
+            "performance": (
+                None if self.performance is None else int(round(self.performance))
+            ),
         }
 
 
@@ -132,6 +156,10 @@ class PlayerStats:
     assists: int = 0
     rounds: int = 0
     score: int = 0
+    #: Performance Score is a whole-match figure, not a per-round one, so it
+    #: averages over the matches that carried one rather than over rounds.
+    performance_total: float = 0.0
+    performance_matches: int = 0
     wins: int = 0
     losses: int = 0
     lines: list[MatchLine] = field(default_factory=list)
@@ -156,6 +184,12 @@ class PlayerStats:
         return int(round(self.score / self.rounds))
 
     @property
+    def performance(self) -> int | None:
+        if not self.performance_matches:
+            return None
+        return int(round(self.performance_total / self.performance_matches))
+
+    @property
     def recent_winrate(self) -> float | None:
         decided = self.wins + self.losses
         if decided == 0:
@@ -168,6 +202,8 @@ class PlayerStats:
             "kd": self.kd,
             "kda": self.kda,
             "acs": self.acs,
+            "performance": self.performance,
+            "performanceMatches": self.performance_matches,
             "kills": self.kills,
             "deaths": self.deaths,
             "assists": self.assists,
@@ -226,6 +262,7 @@ def _summarise_match(payload: dict) -> dict | None:
                 "a": int(stats.get("assists") or 0),
                 "r": int(stats.get("roundsPlayed") or 0),
                 "sc": int(stats.get("score") or 0),
+                "ps": _performance_score(entry.get("scores") or {}),
             }
         )
 
@@ -377,6 +414,10 @@ class StatsEngine:
                 record.assists += row.get("a", 0)
                 record.rounds += row.get("r", 0)
                 record.score += row.get("sc", 0)
+                performance = row.get("ps")
+                if performance is not None:
+                    record.performance_total += performance
+                    record.performance_matches += 1
                 if won is True:
                     record.wins += 1
                 elif won is False:
@@ -395,6 +436,7 @@ class StatsEngine:
                         score=row.get("sc", 0),
                         character_id=row.get("c", ""),
                         competitive_tier=row.get("ct", 0),
+                        performance=row.get("ps"),
                     )
                 )
 

@@ -623,6 +623,71 @@ class TestScoringMetricChanges(unittest.TestCase):
         warned.assert_not_called()
 
 
+class TestPerformanceScore(unittest.TestCase):
+    """13.06 put Performance Score where ACS used to be in the game itself.
+    It arrives under a placeholder name, so reading it has to be defensive."""
+
+    def _player(self, **scores) -> dict:
+        return {
+            "subject": "p1", "teamId": "Blue",
+            "stats": {"kills": 20, "deaths": 10, "assists": 4,
+                      "roundsPlayed": 19, "score": 5719},
+            "scores": scores,
+        }
+
+    def _summarise(self, player: dict) -> dict:
+        return _summarise_match({
+            "matchInfo": {"matchId": "m1", "gameStartMillis": 1},
+            "players": [player],
+        })
+
+    def test_it_is_read_from_riots_placeholder_field(self):
+        # The real numbers from a 13.06 match: the end-of-game screen showed
+        # 353 where the payload carried 352.7.
+        summary = self._summarise(self._player(TempValueF=352.7))
+        self.assertAlmostEqual(summary["players"][0]["ps"], 352.7)
+
+    def test_a_real_name_would_win_over_the_placeholder(self):
+        """So the day Riot ships one, nothing here needs touching."""
+        summary = self._summarise(
+            self._player(performanceScore=311.0, TempValueF=352.7)
+        )
+        self.assertEqual(summary["players"][0]["ps"], 311.0)
+
+    def test_a_value_outside_0_to_500_is_not_performance_score(self):
+        """A placeholder can be repurposed without warning. Better to show
+        nothing than to show whatever landed in the field instead."""
+        self.assertIsNone(self._summarise(self._player(TempValueF=8123.0))
+                          ["players"][0]["ps"])
+        self.assertIsNone(self._summarise(self._player(TempValueF=-4.0))
+                          ["players"][0]["ps"])
+
+    def test_a_match_without_one_simply_has_none(self):
+        self.assertIsNone(self._summarise(self._player())["players"][0]["ps"])
+        self.assertIsNone(
+            _summarise_match({"matchInfo": {"matchId": "m1"},
+                              "players": [{"subject": "p1", "stats": {}}]}
+                             )["players"][0]["ps"]
+        )
+
+    def test_it_averages_over_matches_not_over_rounds(self):
+        """ACS is score per round; Performance Score is already a whole-match
+        number, so a short match counts the same as a long one."""
+        player = PlayerStats(puuid="p1")
+        for value in (353.0, 245.0, 148.0):
+            player.performance_total += value
+            player.performance_matches += 1
+        self.assertEqual(player.performance, 249)
+        self.assertEqual(player.to_dict()["performance"], 249)
+        self.assertEqual(player.to_dict()["performanceMatches"], 3)
+
+    def test_a_player_with_none_reports_none_rather_than_zero(self):
+        blank = PlayerStats(puuid="p1", matches=3, rounds=60, score=12000)
+        self.assertIsNone(blank.performance)
+        self.assertIsNone(blank.to_dict()["performance"])
+        self.assertIsNotNone(blank.to_dict()["acs"])
+
+
 class TestStatsSummary(unittest.TestCase):
     def test_summarise_keeps_no_names(self):
         payload = {

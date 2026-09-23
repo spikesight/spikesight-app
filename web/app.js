@@ -44,7 +44,8 @@
     ["", "K/D/A", "Your kills, deaths and assists in this match."],
     ["", "K/D", "Kills divided by deaths in this match alone."],
     ["", "ACS", "Average combat score: your score per round. Roughly 200 is "
-      + "an even performance for the rank."],
+      + "an even performance for the rank. Hover a row for its Performance "
+      + "Score, the number 13.06 put in ACS's place in the game itself."],
     ["", "RR", "Rating won or lost, and the rank you finished the match on. "
       + "Unrated, Swiftplay and Deathmatch show no RR change."],
     ["mh-right", "Played", "When the match started, in your local time."],
@@ -575,6 +576,10 @@
         + `${player.stats.kills}/${player.stats.deaths}/${player.stats.assists} · `
         + `${player.stats.acs || "—"} ACS
 
+`
+        + performanceLine(player.stats.performance, player.stats.performanceMatches)
+        + `
+
 Not lifetime, and not this act.`;
     } else {
       const blank = el("span", "dash", state.progress ? "…" : "—");
@@ -657,6 +662,19 @@ Not lifetime, and not this act.`;
     }
   }
 
+  // Performance Score arrived in patch 13.06, replacing ACS on the game's own
+  // scoreboard. It is shown next to ACS rather than instead of it: "200 ACS"
+  // means something to everyone, and this number does not mean anything to
+  // anyone yet.
+  function performanceLine(performance, matches) {
+    if (performance == null) {
+      return "Performance Score: not in these matches.";
+    }
+    const over = matches ? ` (from ${matches} of them)` : "";
+    return `Performance Score: ${performance}${over}. `
+      + "Out of 500, and what the game now ranks the scoreboard by.";
+  }
+
   function statBlock(label, value, cls) {
     const stat = el("div", "stat");
     stat.append(el("span", `stat-value ${cls || ""}`, value));
@@ -723,7 +741,9 @@ Not lifetime, and not this act.`;
         : `${Math.round(sum.winrate * 100)}%`,
       sum.winrate >= 0.5 ? "pos" : "neg"));
     grid.append(statBlock("K/D", sum.kd != null ? sum.kd.toFixed(2) : "—"));
-    grid.append(statBlock("ACS", sum.acs != null ? String(sum.acs) : "—"));
+    const acsBlock = statBlock("ACS", sum.acs != null ? String(sum.acs) : "—");
+    acsBlock.title = performanceLine(sum.performance, sum.performanceMatches);
+    grid.append(acsBlock);
     if (sum.rrNet !== null && sum.rrNet !== undefined) {
       grid.append(statBlock("Net RR", `${sum.rrNet > 0 ? "+" : ""}${sum.rrNet}`,
         sum.rrNet >= 0 ? "pos" : "neg"));
@@ -824,7 +844,12 @@ Not lifetime, and not this act.`;
     row.append(el("div", "match-kda",
       match.kills == null ? "—" : `${match.kills}/${match.deaths}/${match.assists}`));
     row.append(el("div", "match-num", match.kd != null ? match.kd.toFixed(2) : "—"));
-    row.append(el("div", "match-num", match.acs != null ? String(match.acs) : "—"));
+    const acs = el("div", "match-num", match.acs != null ? String(match.acs) : "—");
+    acs.title = match.performance != null
+      ? `${match.acs != null ? match.acs + " ACS" : "No ACS"} · `
+        + `Performance Score ${match.performance} out of 500`
+      : "Average combat score for this match.";
+    row.append(acs);
 
     const rr = el("div", "match-rr");
     if (match.rrEarned === null || match.rrEarned === undefined) {

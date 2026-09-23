@@ -68,7 +68,7 @@ class TTLCache:
 
 #: Bump when the stored summary gains a field. Older entries are then treated
 #: as misses and re-fetched once, rather than silently serving partial data.
-SUMMARY_VERSION = 2
+SUMMARY_VERSION = 3
 
 
 class MatchCache:

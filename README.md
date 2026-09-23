@@ -35,7 +35,9 @@ The moment you load into agent select, SpikeSight shows you the lobby:
   A Diamond who peaked Immortal two acts ago plays nothing like a Diamond who
   just got there.
 - **Recent form** — K/D and average combat score over each player's last few
-  matches in the mode you're queued into, not their lifetime stats.
+  matches in the mode you're queued into, not their lifetime stats. Hover it
+  for their Performance Score, the number the game itself now ranks the
+  scoreboard by.
 - **Party detection** — who queued together, colour-coded, including 4- and
   5-stacks in the modes that allow them. Confirmed parties and likely ones are
   marked differently, because one is a fact and the other is an inference.
