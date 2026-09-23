@@ -81,6 +81,9 @@ class DesktopSession:
         self._first_connect_deadline = time.monotonic() + UI_FIRST_CONNECT_TIMEOUT
         self.never_connected = False
 
+        # Before anything else: if a previous run died without taking its
+        # overlay browser with it, that browser is still running right now.
+        overlay.reap_stale_browser()
         self._overlay = overlay.OverlayWindow(url.rstrip("/") + "/overlay")
         self._hotkey: overlay.Hotkey | None = None
         self._overlay_retry_at = 0.0

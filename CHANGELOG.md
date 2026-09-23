@@ -9,6 +9,26 @@ The version you are running is shown at the top of the gear panel.
 
 ---
 
+## 2.2.4 — The overlay was costing you frames
+
+### Fixed
+
+- **The overlay popping in and out over the game, and the frame rate that
+  went with it.** A fullscreen game takes the top of the z-order back as a
+  matter of course. The overlay answered that by killing its browser and
+  starting a new one — and then did it again, every fifteen seconds, for as
+  long as you were in the lobby. Each new window appeared on screen for a
+  moment before it could be hidden, and a visible window over a Windowed
+  Fullscreen game stops the game drawing straight to the screen. It now tries
+  three times and then leaves it alone.
+- **Closing the app left its overlay browser running.** Eight Edge processes
+  and a few hundred megabytes, with nothing on screen and no way to notice
+  them short of Task Manager — which is the other half of "I closed it and my
+  frame rate is still wrong". The browser is now shut down properly on the way
+  out, and anything a crash left behind is cleaned up on the way in.
+
+---
+
 ## 2.2.3 — Keeping up with patch 13.06
 
 VALORANT 13.06 moved a few things under SpikeSight's feet. This keeps up with

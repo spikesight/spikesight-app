@@ -1382,6 +1382,107 @@ class TestUpdateCheck(unittest.TestCase):
         get.assert_not_called()
 
 
+class TestOverlayRebuildBudget(unittest.TestCase):
+    """A fullscreen game takes the top of the z-order back as a matter of
+    course. Answering that with a browser relaunch every time meant a panel
+    flickering over the game all match, and frames lost to each appearance."""
+
+    def _window(self):
+        from spikesight import overlay as overlay_module
+
+        window = overlay_module.OverlayWindow.__new__(overlay_module.OverlayWindow)
+        window._topmost_failures = 0
+        window._rebuilt_at = 0.0
+        window._rebuilds = 0
+        window.stop = mock.Mock()
+        window.ensure_started = mock.Mock()
+        return window, overlay_module
+
+    def test_losing_topmost_over_and_over_does_not_rebuild_for_ever(self):
+        window, module = self._window()
+        rebuilds = 0
+        # Ten losses, each well past the cooldown, each one "recovered" - which
+        # is exactly the cycle that used to reset the counter and loop.
+        for minute in range(10):
+            with mock.patch.object(module.time, "monotonic",
+                                   return_value=minute * 60.0):
+                if window._rebuild_for_topmost():
+                    rebuilds += 1
+                    window._topmost_failures = 0  # the rebuild got topmost back
+
+        self.assertEqual(rebuilds, module.MAX_REBUILDS)
+        self.assertLessEqual(rebuilds, 3)
+
+    def test_the_cooldown_still_applies(self):
+        window, module = self._window()
+        with mock.patch.object(module.time, "monotonic", return_value=100.0):
+            self.assertTrue(window._rebuild_for_topmost())
+        with mock.patch.object(module.time, "monotonic", return_value=101.0):
+            self.assertFalse(window._rebuild_for_topmost())
+
+    def test_a_window_that_never_gets_topmost_still_gives_up_early(self):
+        """The old guard, which is about consecutive failures, is untouched."""
+        window, module = self._window()
+        window._topmost_failures = 2
+        with mock.patch.object(module.time, "monotonic", return_value=500.0):
+            self.assertFalse(window._rebuild_for_topmost())
+
+
+class TestOverlayBrowserCleanup(unittest.TestCase):
+    """Closing the app used to leave its overlay browser running - eight Edge
+    processes with nothing on screen and nothing to stop them."""
+
+    def setUp(self):
+        from spikesight import overlay as overlay_module
+
+        self.module = overlay_module
+        self._dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._dir.cleanup)
+        patcher = mock.patch.object(
+            overlay_module, "PID_FILE", Path(self._dir.name) / "overlay-window.pid"
+        )
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_the_browser_pid_is_written_down_so_a_crash_can_be_cleaned_up(self):
+        self.module._remember_pid(4321)
+        self.assertEqual(self.module.PID_FILE.read_text(encoding="utf-8"), "4321")
+
+    def test_a_leftover_browser_is_killed_on_the_next_start(self):
+        self.module._remember_pid(4321)
+        with mock.patch.object(self.module, "kill_browser_tree",
+                               return_value=True) as kill:
+            self.assertTrue(self.module.reap_stale_browser())
+        kill.assert_called_once_with(4321)
+        # And the note is torn up, so it is not acted on twice.
+        self.assertFalse(self.module.PID_FILE.exists())
+
+    def test_no_note_means_nothing_to_do(self):
+        with mock.patch.object(self.module, "kill_browser_tree") as kill:
+            self.assertFalse(self.module.reap_stale_browser())
+        kill.assert_not_called()
+
+    def test_a_corrupt_note_is_not_acted_on(self):
+        self.module.PID_FILE.write_text("not a pid", encoding="utf-8")
+        with mock.patch.object(self.module, "kill_browser_tree") as kill:
+            self.assertFalse(self.module.reap_stale_browser())
+        kill.assert_not_called()
+
+    def test_the_kill_is_filtered_by_image_name_because_pids_are_reused(self):
+        with mock.patch.object(self.module.subprocess, "run") as run:
+            run.return_value = mock.Mock(returncode=0)
+            self.module.kill_browser_tree(4321)
+        args = run.call_args[0][0]
+        self.assertIn("PID eq 4321", args)
+        self.assertIn("IMAGENAME eq msedge.exe", args)
+        self.assertIn("/T", args)
+
+    def test_pid_zero_is_never_killed(self):
+        with mock.patch.object(self.module.subprocess, "run") as run:
+            self.assertFalse(self.module.kill_browser_tree(0))
+        run.assert_not_called()
+
+
 class TestOverlayTopmost(unittest.TestCase):
     """Always-on-top is the whole feature: without it the panel is invisible."""
 

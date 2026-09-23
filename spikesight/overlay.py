@@ -68,6 +68,22 @@ OPACITY = 236
 #: Don't rebuild the window more often than this while trying for topmost.
 REBUILD_COOLDOWN = 15.0
 
+#: How many times a single run may rebuild the window to chase always-on-top.
+#:
+#: A rebuild means killing the browser and starting another one, and a new
+#: window is briefly on screen before it can be styled and hidden. Over a game
+#: that is a panel flickering in and out, and every appearance costs frames:
+#: a visible window over a Windowed Fullscreen game stops it drawing straight
+#: to the screen. A fullscreen game takes the top of the z-order back as a
+#: matter of course, so "lost topmost" is not rare enough to keep answering
+#: forever. After this many tries the panel is left where it is - drawn behind
+#: the game and useless, but costing nothing - until the next run.
+MAX_REBUILDS = 3
+
+#: Where the overlay browser's process id is kept, so a run that dies without
+#: shutting down cleanly can still have its browser cleaned up by the next one.
+PID_FILE = paths.DATA_DIR / "overlay-window.pid"
+
 #: Where the window waits while it is not wanted, and how long it is given to
 #: paint there before it slides into view. Showing a Chromium window that has
 #: not painted yet means a grey box with a title bar on it for a moment, which
@@ -386,6 +402,75 @@ def _style_as_overlay(hwnd, interactive: bool = False) -> None:
     _user32.SetLayeredWindowAttributes(hwnd, 0, 255 if interactive else OPACITY, LWA_ALPHA)
 
 
+def _window_pid(hwnd) -> int:
+    """The process that owns a window - the browser itself, not the launcher.
+
+    Edge's launcher hands off to a browser process and exits, so the handle
+    ``subprocess`` gave us stops being the thing we need to kill almost
+    immediately. The window is owned by the real one.
+    """
+    if _user32 is None or not hwnd:
+        return 0
+    pid = wintypes.DWORD(0)
+    _user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    return int(pid.value)
+
+
+def kill_browser_tree(pid: int) -> bool:
+    """Kill a browser process and its children. Returns True if it ran.
+
+    Filtered on the image name as well as the pid, because pids are reused and
+    this is read from a file that may have outlived the process it names.
+    """
+    if not pid or sys.platform != "win32":
+        return False
+    try:
+        result = subprocess.run(
+            ["taskkill", "/FI", f"PID eq {pid}", "/FI", "IMAGENAME eq msedge.exe",
+             "/T", "/F"],
+            capture_output=True, text=True, timeout=10,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return result.returncode == 0
+
+
+def _remember_pid(pid: int) -> None:
+    try:
+        paths.ensure_data_dirs()
+        PID_FILE.write_text(str(pid), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _forget_pid() -> None:
+    try:
+        PID_FILE.unlink()
+    except OSError:
+        pass
+
+
+def reap_stale_browser() -> bool:
+    """Clean up an overlay browser left behind by a previous run.
+
+    Closing the app used to leave its overlay browser running: eight Edge
+    processes and a few hundred megabytes, with nothing on screen and nothing
+    to stop them. That is the other half of "I closed it and my frame rate is
+    still wrong" - so the browser is now killed properly on the way out, and
+    anything that got away is cleaned up here on the way in.
+    """
+    try:
+        pid = int(PID_FILE.read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        return False
+    killed = kill_browser_tree(pid)
+    if killed:
+        log.info("Cleaned up an overlay browser left over from a previous run.")
+    _forget_pid()
+    return killed
+
+
 def find_overlay_window():
     """Our overlay's HWND, visible or not."""
     if _user32 is None:
@@ -419,6 +504,11 @@ class OverlayWindow:
         #: rebuilt did not help; the panel is then shown as best we can.
         self._topmost_failures = 0
         self._rebuilt_at = 0.0
+        #: Rebuilds used this run. Never reset: see MAX_REBUILDS.
+        self._rebuilds = 0
+        #: The browser process that owns the window, which is not the process
+        #: we launched - see _window_pid.
+        self._browser_pid = 0
         #: Set while the window is up off screen, painting before it is shown.
         self._warming_since: float | None = None
         #: Set once the page has reported a size for what it is showing now.
@@ -540,6 +630,8 @@ class OverlayWindow:
         # exists, because the window was briefly visible while starting.
         remove_from_taskbar(hwnd)
         self._hwnd = hwnd
+        self._browser_pid = _window_pid(hwnd)
+        _remember_pid(self._browser_pid)
         self._visible = False
         if topmost:
             self._topmost_failures = 0
@@ -565,6 +657,13 @@ class OverlayWindow:
                         self._process.kill()
                     except OSError:
                         pass
+            # The launcher is not the browser. Closing the window and killing
+            # the handle we hold both leave the real process running, so take
+            # the tree down by the pid that owned the window.
+            if self._browser_pid:
+                kill_browser_tree(self._browser_pid)
+                self._browser_pid = 0
+            _forget_pid()
             self._process = None
             self._hwnd = None
             self._visible = False
@@ -664,11 +763,22 @@ class OverlayWindow:
         """
         if self._topmost_failures >= 2:
             return False
+        # Losing topmost again after a rebuild that worked used to reset the
+        # count above, so a game that keeps taking the z-order back kept us
+        # killing and relaunching the browser every cooldown, forever, with a
+        # window flashing over the game each time. The budget below is for the
+        # whole run and is never reset.
+        if self._rebuilds >= MAX_REBUILDS:
+            return False
         now = time.monotonic()
         if now - self._rebuilt_at < REBUILD_COOLDOWN:
             return False
         self._rebuilt_at = now
-        log.info("Overlay lost always-on-top; rebuilding its window.")
+        self._rebuilds += 1
+        log.info(
+            "Overlay lost always-on-top; rebuilding its window (%s of %s).",
+            self._rebuilds, MAX_REBUILDS,
+        )
         self.stop()
         self.ensure_started()
         return True
