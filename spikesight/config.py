@@ -97,7 +97,7 @@ DEFAULTS: dict[str, Any] = {
         "kd_threshold": 1.45,
         "winrate_threshold": 0.65,
         "min_games_for_winrate": 8,
-        "score_threshold": 45,
+        "score_threshold": 50,
     },
     "winprob": {
         "elo_scale": 120.0,
@@ -156,7 +156,7 @@ level_threshold = 60
 kd_threshold = 1.45
 winrate_threshold = 0.65
 min_games_for_winrate = 8
-score_threshold = 45
+score_threshold = 50
 
 [winprob]
 # Rating points per logistic unit. Larger = flatter (less confident) curve.
@@ -311,6 +311,11 @@ _MIGRATIONS: list[tuple[str, str, str]] = [
         'queue = "competitive"',
         'queue = "auto"',
         "recent-match history now follows the queue you are in",
+    ),
+    (
+        "score_threshold = 45",
+        "score_threshold = 50",
+        "only scores worth acting on are shown",
     ),
 ]
 

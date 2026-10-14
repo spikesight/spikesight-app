@@ -403,11 +403,6 @@ select option { background: var(--bg-raised); color: var(--text); }
 .badge-note  { background: rgba(209,60,75,.2); color: var(--note-text); border: 1px solid rgba(209,60,75,.45); }
 .badge-priv  { background: var(--chip); color: var(--text-faint); }
 /* Sub-threshold smurf score: readable at a glance without a tooltip. */
-.badge-score {
-  background: var(--chip); color: var(--text-dim); border: 1px solid var(--line);
-  font-weight: 600; letter-spacing: 0;
-}
-.badge-score b { color: var(--text); font-weight: 700; }
 
 .rank-cell { display: flex; align-items: center; gap: 7px; }
 .rank-chip {

@@ -9,6 +9,19 @@ The version you are running is shown at the top of the gear panel.
 
 ---
 
+## 2.2.5 — Smurf flags only when it means something
+
+### Changed
+
+- **The smurf score only shows when it's worth acting on.** The small
+  "smurf 23/100" chip that turned up on half a lobby is gone — a middling
+  score was never a reason to do anything differently, and a board covered in
+  them made the real flags easier to miss. The flag now needs 50 or more, and
+  nothing below that says anything at all. The full breakdown is still there
+  on hover when a player is flagged.
+
+---
+
 ## 2.2.4 — The overlay was costing you frames
 
 ### Fixed

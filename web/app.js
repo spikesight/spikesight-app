@@ -592,16 +592,6 @@ Not lifetime, and not this act.`;
 
     /* flags */
     const flags = el("div", "col-flags");
-    if (!player.smurf.flagged && player.smurf.score > 0) {
-      // Under the flag threshold but not nothing. "/100" makes it read as a
-      // score rather than a count of something.
-      const badge = el("span", "badge badge-score");
-      badge.append(el("span", null, "smurf "));
-      badge.append(el("b", null, String(player.smurf.score)));
-      badge.append(el("span", null, "/100"));
-      badge.title = smurfTooltip(player.smurf);
-      flags.append(badge);
-    }
     if (player.party && player.party.size >= 3) {
       flags.append(el("span", "badge badge-priv", `${player.party.size}-STACK`));
     }

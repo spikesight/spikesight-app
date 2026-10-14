@@ -245,6 +245,35 @@ def observed(*groups) -> tuple[dict, dict]:
     return pairs, sets
 
 
+class TestSmurfThreshold(unittest.TestCase):
+    """The flag is the whole smurf UI now, so where it trips is the feature."""
+
+    def _evaluate(self, **kwargs):
+        base = dict(cfg=cfg(), account_level=None, level_hidden=False,
+                    current_tier=None, peak_tier=None, act_games=None,
+                    act_wins=None, kd=None, recent_matches=0,
+                    recent_winrate=None)
+        base.update(kwargs)
+        return smurf.evaluate(**base)
+
+    def test_a_middling_score_says_nothing(self):
+        # Silver, level 50, 1.50 K/D: scores 30, which used to put a
+        # "smurf 30/100" chip on the board. Not worth acting on.
+        verdict = self._evaluate(account_level=50, current_tier=10, kd=1.50,
+                                 recent_matches=5)
+        self.assertEqual(verdict.score, 30)
+        self.assertFalse(verdict.flagged)
+
+    def test_a_high_score_still_flags(self):
+        verdict = self._evaluate(account_level=30, current_tier=21, kd=1.50,
+                                 recent_matches=5)
+        self.assertGreaterEqual(verdict.score, 50)
+        self.assertTrue(verdict.flagged)
+
+    def test_the_threshold_is_fifty(self):
+        self.assertEqual(int(cfg().get("smurf.score_threshold")), 50)
+
+
 class TestParties(unittest.TestCase):
     def test_shared_party_id_is_confirmed(self):
         result = parties.detect(

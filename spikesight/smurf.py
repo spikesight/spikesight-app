@@ -65,7 +65,7 @@ def evaluate(
     kd_threshold = float(cfg.get("smurf.kd_threshold", 1.45))
     winrate_threshold = float(cfg.get("smurf.winrate_threshold", 0.65))
     min_games = int(cfg.get("smurf.min_games_for_winrate", 8))
-    score_threshold = int(cfg.get("smurf.score_threshold", 45))
+    score_threshold = int(cfg.get("smurf.score_threshold", 50))
 
     signals: list[Signal] = []
     score = 0
