@@ -24,4 +24,8 @@
     <ProjectReference Include="..\SpikeSight.Core\SpikeSight.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="Fixtures/*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

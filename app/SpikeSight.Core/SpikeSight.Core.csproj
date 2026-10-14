@@ -1,9 +1,16 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Agent and map names ship with the app, so it makes zero third-party
+         requests at runtime: only 127.0.0.1 and Riot's own hosts. -->
+    <EmbeddedResource Include="Data/agents.json" />
+    <EmbeddedResource Include="Data/maps.json" />
+  </ItemGroup>
 
 </Project>
