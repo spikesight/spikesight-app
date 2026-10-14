@@ -1,0 +1,39 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v8.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v8.0": {
+      "SpikeSight.Probe/1.0.0": {
+        "dependencies": {
+          "SpikeSight.Core": "1.0.0"
+        },
+        "runtime": {
+          "SpikeSight.Probe.dll": {}
+        }
+      },
+      "SpikeSight.Core/1.0.0": {
+        "runtime": {
+          "SpikeSight.Core.dll": {
+            "assemblyVersion": "1.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "SpikeSight.Probe/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "SpikeSight.Core/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

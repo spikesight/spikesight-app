@@ -326,7 +326,15 @@ class ScoreboardBuilder:
             },
             "winProbability": probability.to_dict() if probability else None,
             "teams": [
-                {"side": "ally", "label": "Your team", "players": ally},
+                {
+                    "side": "ally",
+                    # Free-for-all modes put the whole lobby on one team id, so
+                    # everyone lands on our side with nobody opposite. They are
+                    # not team mates - in Deathmatch every one of them is
+                    # shooting at you.
+                    "label": "Your team" if enemy else "Everyone in this match",
+                    "players": ally,
+                },
                 {
                     "side": "enemy",
                     "label": "Enemy team" if two_teams else "Everyone else",

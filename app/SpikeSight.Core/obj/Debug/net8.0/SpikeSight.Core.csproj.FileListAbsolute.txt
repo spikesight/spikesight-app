@@ -1,0 +1,12 @@
+F:\projects\valscout\app\SpikeSight.Core\bin\Debug\net8.0\SpikeSight.Core.deps.json
+F:\projects\valscout\app\SpikeSight.Core\bin\Debug\net8.0\SpikeSight.Core.dll
+F:\projects\valscout\app\SpikeSight.Core\bin\Debug\net8.0\SpikeSight.Core.pdb
+F:\projects\valscout\app\SpikeSight.Core\obj\Debug\net8.0\SpikeSight.Core.GeneratedMSBuildEditorConfig.editorconfig
+F:\projects\valscout\app\SpikeSight.Core\obj\Debug\net8.0\SpikeSight.Core.AssemblyInfoInputs.cache
+F:\projects\valscout\app\SpikeSight.Core\obj\Debug\net8.0\SpikeSight.Core.AssemblyInfo.cs
+F:\projects\valscout\app\SpikeSight.Core\obj\Debug\net8.0\SpikeSight.Core.csproj.CoreCompileInputs.cache
+F:\projects\valscout\app\SpikeSight.Core\obj\Debug\net8.0\SpikeSight.Core.sourcelink.json
+F:\projects\valscout\app\SpikeSight.Core\obj\Debug\net8.0\SpikeSight.Core.dll
+F:\projects\valscout\app\SpikeSight.Core\obj\Debug\net8.0\refint\SpikeSight.Core.dll
+F:\projects\valscout\app\SpikeSight.Core\obj\Debug\net8.0\SpikeSight.Core.pdb
+F:\projects\valscout\app\SpikeSight.Core\obj\Debug\net8.0\ref\SpikeSight.Core.dll

@@ -2004,6 +2004,30 @@ class TestScoreboard(unittest.IsolatedAsyncioTestCase):
                     return player
         raise AssertionError(f"{puuid} missing from snapshot")
 
+    async def test_a_free_for_all_lobby_does_not_call_them_team_mates(self):
+        """Deathmatch puts all eleven players on one team id, so everyone
+        lands on our side of the board with nobody opposite. Captured from a
+        real Deathmatch: TeamID "Blue" for every player in the lobby."""
+        payload = self._payload()
+        payload["MatchmakingData"] = {"QueueID": "deathmatch", "IsRanked": False}
+        payload["Players"] = [
+            {"Subject": f"p{i}", "TeamID": "Blue", "CharacterID": "agent1",
+             "PlayerIdentity": {"AccountLevel": 50}, "SeasonalBadgeInfo": {"Rank": 0}}
+            for i in range(11)
+        ]
+        payload["Players"][0]["Subject"] = "me"
+
+        remote = _StubRemote({"me": _mmr_payload(self.ACT_ID, 17, 40)}, {})
+        snapshot = await self._builder(remote).build(
+            state="INGAME", match_payload=payload, self_puuid="me", deep=False,
+        )
+
+        ally, enemy = snapshot["teams"]
+        self.assertEqual(len(ally["players"]), 11)
+        self.assertEqual(len(enemy["players"]), 0)
+        self.assertEqual(ally["label"], "Everyone in this match")
+        self.assertIsNone(snapshot["winProbability"])
+
     async def test_a_lobby_that_is_not_two_teams_gets_no_odds(self):
         """Gauntlet puts eight duos in one session. Everyone who is not on
         your team then lands on the other side of the board, and a

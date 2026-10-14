@@ -9,6 +9,17 @@ The version you are running is shown at the top of the gear panel.
 
 ---
 
+## 2.2.6 — Deathmatch isn't a team game
+
+### Fixed
+
+- **Deathmatch called the whole lobby your team.** Free-for-all modes put
+  every player on one team internally, so all ten opponents turned up under
+  "Your team" with an empty enemy side. They're now listed as "Everyone in
+  this match", which is what they are — each one is shooting at you.
+
+---
+
 ## 2.2.5 — Smurf flags only when it means something
 
 ### Changed
