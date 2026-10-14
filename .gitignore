@@ -11,3 +11,7 @@ build/
 # which is the bundled agent and map tables the app cannot start without.
 /config.toml
 /data/
+
+# .NET build output (the v3 rewrite)
+app/**/bin/
+app/**/obj/

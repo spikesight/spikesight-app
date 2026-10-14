@@ -1,0 +1,34 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SpikeSight.Core", "SpikeSight.Core\SpikeSight.Core.csproj", "{376E454C-CB86-482F-B9E1-584C3F50E1E6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SpikeSight.Probe", "SpikeSight.Probe\SpikeSight.Probe.csproj", "{CC4407CF-56FA-4E48-A325-2B9B55A83221}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SpikeSight.Tests", "SpikeSight.Tests\SpikeSight.Tests.csproj", "{398C6E29-8DC9-4EBF-91B0-57B5C7C350B5}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{376E454C-CB86-482F-B9E1-584C3F50E1E6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{376E454C-CB86-482F-B9E1-584C3F50E1E6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{376E454C-CB86-482F-B9E1-584C3F50E1E6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{376E454C-CB86-482F-B9E1-584C3F50E1E6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CC4407CF-56FA-4E48-A325-2B9B55A83221}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CC4407CF-56FA-4E48-A325-2B9B55A83221}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CC4407CF-56FA-4E48-A325-2B9B55A83221}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CC4407CF-56FA-4E48-A325-2B9B55A83221}.Release|Any CPU.Build.0 = Release|Any CPU
+		{398C6E29-8DC9-4EBF-91B0-57B5C7C350B5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{398C6E29-8DC9-4EBF-91B0-57B5C7C350B5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{398C6E29-8DC9-4EBF-91B0-57B5C7C350B5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{398C6E29-8DC9-4EBF-91B0-57B5C7C350B5}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
