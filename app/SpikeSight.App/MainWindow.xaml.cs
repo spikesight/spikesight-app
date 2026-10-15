@@ -8,6 +8,7 @@ using SpikeSight.Core.Game;
 using SpikeSight.Core.Riot;
 using SpikeSight.Core.Store;
 using SpikeSight.Core.Windows;
+using SpikeSight.Core.Windows;
 
 namespace SpikeSight.App;
 
@@ -24,6 +25,9 @@ public partial class MainWindow : Window
     private readonly CancellationTokenSource _stopping = new();
     private readonly LocalClient _local = new();
     private readonly NotesStore _notes = new(Paths.NotesDb);
+    private UserSettings _settings = UserSettings.Load();
+    private TrayIcon? _tray;
+    private bool _reallyQuitting;
     private OverlayWindow? _overlay;
     private MatchPoller? _poller;
     private string _lastState = "";
@@ -69,7 +73,17 @@ public partial class MainWindow : Window
              + $"topmost={Win32.HasStyle(hwnd, Win32.WsExTopmost)} "
              + $"| processes=1");
 
-        _poller = new MatchPoller(_local) { Notes = _notes };
+        _tray = new TrayIcon(
+            show: () => Dispatcher.InvokeAsync(Reveal),
+            quit: () => Dispatcher.InvokeAsync(() => { _reallyQuitting = true; Close(); }));
+
+        ShowSettings();
+        _poller = new MatchPoller(_local)
+        {
+            Notes = _notes,
+            DeepStats = _settings.DeepStats,
+            Settings = _settings.ToGameSettings(),
+        };
         _poller.Warned += message => Dispatcher.InvokeAsync(() => Note(message));
         // The loop runs off the UI thread; marshal each snapshot back onto it.
         _poller.Updated += snapshot => Dispatcher.InvokeAsync(() => Show(snapshot));
@@ -140,7 +154,7 @@ public partial class MainWindow : Window
 
         // Agent select only. Once the match starts the panel has done its
         // job, and leaving it up is just something drawn over the game.
-        if (snapshot.State == "PREGAME" && !snapshot.Stale)
+        if (_settings.OverlayEnabled && snapshot.State == "PREGAME" && !snapshot.Stale)
         {
             var side = board.Sides.First(s => s.Players.Count > 0);
             _overlay?.ShowLobby($"{side.Label} - {board.MapName}", rows);
@@ -209,6 +223,59 @@ public partial class MainWindow : Window
         }
     }
 
+    private void Reveal()
+    {
+        Show();
+        WindowState = WindowState.Normal;
+        Activate();
+    }
+
+    private void ToggleSettings(object sender, RoutedEventArgs e)
+    {
+        var opening = SettingsPane.Visibility != Visibility.Visible;
+        SettingsPane.Visibility = opening ? Visibility.Visible : Visibility.Collapsed;
+        MatchLine.Visibility = opening ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void ShowSettings()
+    {
+        OptOverlay.IsChecked = _settings.OverlayEnabled;
+        OptDeepStats.IsChecked = _settings.DeepStats;
+        OptSmurf.IsChecked = _settings.SmurfDetection;
+        OptCloseToTray.IsChecked = _settings.CloseToTray;
+        // Read from the registry rather than the settings file: that is where
+        // the truth is, and somebody may have removed it by hand.
+        OptAutostart.IsChecked = Autostart.IsEnabled();
+    }
+
+    private void SettingChanged(object sender, RoutedEventArgs e)
+    {
+        var wanted = OptAutostart.IsChecked == true;
+        var autostartOk = wanted == Autostart.IsEnabled() || Autostart.Set(wanted);
+
+        _settings = _settings with
+        {
+            OverlayEnabled = OptOverlay.IsChecked == true,
+            DeepStats = OptDeepStats.IsChecked == true,
+            SmurfDetection = OptSmurf.IsChecked == true,
+            CloseToTray = OptCloseToTray.IsChecked == true,
+            StartWithWindows = autostartOk && wanted,
+        };
+        _settings.Save();
+
+        if (!autostartOk)
+        {
+            OptAutostart.IsChecked = Autostart.IsEnabled();
+            SettingsNote.Text = "Windows would not let that registry value be written.";
+        }
+        else
+        {
+            SettingsNote.Text = "Deep stats and smurf changes apply to the next lobby.";
+        }
+
+        if (!_settings.OverlayEnabled) _overlay?.HidePanel();
+    }
+
     private static Brush Swatch(string hex)
         => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
 
@@ -219,9 +286,24 @@ public partial class MainWindow : Window
         catch (ArgumentException) { return "(gone)"; }
     }
 
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        // Closing to the tray keeps the lobby being watched, which is the
+        // point of it - but only when that was asked for.
+        if (_settings.CloseToTray && !_reallyQuitting)
+        {
+            e.Cancel = true;
+            Hide();
+            _tray?.Notify("SpikeSight", "Still watching. Double-click to bring it back.");
+            return;
+        }
+        base.OnClosing(e);
+    }
+
     protected override void OnClosed(EventArgs e)
     {
         _stopping.Cancel();
+        _tray?.Dispose();
         _poller?.Dispose();
         _notes.Dispose();
         _local.Dispose();

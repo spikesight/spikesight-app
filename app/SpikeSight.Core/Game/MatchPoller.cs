@@ -69,6 +69,9 @@ public sealed class MatchPoller : IDisposable
     /// <summary>Fetch recent form as well as ranks. Off makes a scan much lighter.</summary>
     public bool DeepStats { get; init; } = true;
 
+    /// <summary>Thresholds the board scores against.</summary>
+    public Settings Settings { get; init; } = Settings.Default;
+
     public TimeSpan Heartbeat { get; init; } = TimeSpan.FromSeconds(2);
     public TimeSpan IdleDelay { get; init; } = TimeSpan.FromSeconds(5);
 
@@ -315,7 +318,7 @@ public sealed class MatchPoller : IDisposable
 
         var usable = _form?.MatchId == _plan.MatchId;
         var board = BoardBuilder.Build(
-            match, selfPuuid, mmr, names, _acts.Current?.Id, state: state,
+            match, selfPuuid, mmr, names, _acts.Current?.Id, settings: Settings, state: state,
             stats: usable ? _form?.Stats : null,
             partyIds: partyIds,
             coParty: usable ? _lastStats?.CoParty : null,

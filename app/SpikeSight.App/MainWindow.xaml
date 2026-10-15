@@ -29,7 +29,28 @@
             <TextBlock Text="SPIKE" FontWeight="Bold" FontSize="21" Foreground="#FF4655"/>
             <TextBlock Text="SIGHT" FontWeight="Bold" FontSize="21"/>
             <TextBlock Text="v3 preview" FontSize="12" Foreground="#98A1B3" Margin="10,8,0,0"/>
+            <Button x:Name="SettingsButton" Content="settings" Margin="16,4,0,0" Padding="8,2"
+                    FontSize="11" Background="#1C2430" Foreground="#98A1B3"
+                    BorderBrush="#2A3240" Click="ToggleSettings"/>
         </StackPanel>
+
+        <Border x:Name="SettingsPane" Grid.Row="1" Visibility="Collapsed"
+                Background="#151922" CornerRadius="6" Padding="14,12" Margin="0,8,0,4">
+            <StackPanel>
+                <CheckBox x:Name="OptOverlay" Content="Pre-match overlay over agent select"
+                          Foreground="#E6E9EF" Margin="0,0,0,7" Click="SettingChanged"/>
+                <CheckBox x:Name="OptDeepStats" Content="Fetch recent-match stats (K/D, ACS, Performance Score)"
+                          Foreground="#E6E9EF" Margin="0,0,0,7" Click="SettingChanged"/>
+                <CheckBox x:Name="OptSmurf" Content="Smurf detection"
+                          Foreground="#E6E9EF" Margin="0,0,0,7" Click="SettingChanged"/>
+                <CheckBox x:Name="OptCloseToTray" Content="Close to the notification area instead of quitting"
+                          Foreground="#E6E9EF" Margin="0,0,0,7" Click="SettingChanged"/>
+                <CheckBox x:Name="OptAutostart" Content="Start with Windows"
+                          Foreground="#E6E9EF" Click="SettingChanged"/>
+                <TextBlock x:Name="SettingsNote" FontSize="11" Foreground="#6E7687" Margin="0,9,0,0"
+                           TextWrapping="Wrap"/>
+            </StackPanel>
+        </Border>
 
         <TextBlock x:Name="MatchLine" Grid.Row="1" Margin="0,8,0,10"
                    FontSize="13" Foreground="#98A1B3"/>
