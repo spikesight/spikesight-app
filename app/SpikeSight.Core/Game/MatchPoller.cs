@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using SpikeSight.Core.Riot;
 
@@ -286,7 +287,15 @@ public sealed class MatchPoller : IDisposable
         _onScreen = (payload, state, matchId);
 
         // Quick pass: ranks and names, on screen straight away.
+        var started = Stopwatch.GetTimestamp();
         Publish(new Snapshot(state, await BuildAsync(remote, payload, puuid, state, ct), ""));
+
+        // Timed, because "it stuttered once" is only diagnosable against a
+        // record of how long each pass took and when. A fresh lobby always,
+        // and any rescan slow enough to be felt.
+        var quick = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+        if (fresh || quick > 750)
+            Warned?.Invoke($"timing: {state} ranks+names {quick:F0}ms");
 
         if (!DeepStats || !fresh || _stats is null) return;
 
@@ -313,10 +322,18 @@ public sealed class MatchPoller : IDisposable
     {
         try
         {
-            if (state == "INGAME") await Task.Delay(EnrichDelayInGame, ct);
+            if (state == "INGAME")
+            {
+                Warned?.Invoke($"timing: holding form read {EnrichDelayInGame.TotalSeconds:F0}s "
+                               + "while the map loads");
+                await Task.Delay(EnrichDelayInGame, ct);
+            }
 
             var roster = Roster(payload, state).ToList();
+            var started = Stopwatch.GetTimestamp();
             var result = await _stats!.CollectAsync(roster, QueueOf(payload), ct: ct);
+            Warned?.Invoke($"timing: form read for {roster.Count} players took "
+                           + $"{Stopwatch.GetElapsedTime(started).TotalMilliseconds:F0}ms");
 
             if (_plan.MatchId != matchId) return;   // moved on while we were reading
             _form = (matchId, result.Players);

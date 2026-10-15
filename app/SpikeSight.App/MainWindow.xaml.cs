@@ -80,20 +80,53 @@ public partial class MainWindow : Window
 
     private void Note(string text)
     {
-        _diagnostics.AppendLine($"{DateTime.Now:HH:mm:ss}  {text}");
+        var line = $"{DateTime.Now:HH:mm:ss.fff}  {text}";
+        _diagnostics.AppendLine(line);
         Diagnostics.Text = _diagnostics.ToString();
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
-            File.WriteAllText(LogPath, _diagnostics.ToString());
+            File.AppendAllText(LogPath, line + Environment.NewLine);
         }
         catch (IOException) { /* the window still has it */ }
+    }
+
+    /// <summary>
+    /// What machine this was, written once per run.
+    ///
+    /// The first tester report came back with a log that could not answer
+    /// "which build, on what" - so it could not answer anything. Appended
+    /// rather than overwritten for the same reason: closing the app before
+    /// sending the log used to erase it.
+    /// </summary>
+    private void OpenLog()
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
+            // Rolled rather than grown: a few runs of history is all anyone
+            // reads, and nobody is emailing a 40MB text file.
+            var log = new FileInfo(LogPath);
+            if (log.Exists && log.Length > 512 * 1024) log.Delete();
+        }
+        catch (IOException) { /* Note will try again and give up quietly */ }
+
+        using var self = Process.GetCurrentProcess();
+        Note($"--- SpikeSight {UpdateCheck.CurrentVersion} started "
+             + $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} ---");
+        Note($"machine: Windows {Environment.OSVersion.Version}, "
+             + $"{Environment.ProcessorCount} cores, "
+             + $"priority={self.PriorityClass}, "
+             + $"game={(Process.GetProcessesByName("VALORANT-Win64-Shipping").Length > 0
+                           ? "running" : "not running")}");
     }
 
     private void Start()
     {
         // Who holds foreground now that our windows are up. If this still
         // names the game, nothing was taken.
+        OpenLog();
+
         var foreground = Win32.ForegroundProcessId();
         var stolen = foreground == Environment.ProcessId;
 
