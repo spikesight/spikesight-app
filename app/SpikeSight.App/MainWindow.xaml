@@ -46,6 +46,8 @@
                 <CheckBox x:Name="OptCloseToTray" Content="Close to the notification area instead of quitting"
                           Foreground="#E6E9EF" Margin="0,0,0,7" Click="SettingChanged"/>
                 <CheckBox x:Name="OptAutostart" Content="Start with Windows"
+                          Foreground="#E6E9EF" Margin="0,0,0,7" Click="SettingChanged"/>
+                <CheckBox x:Name="OptDiagnostics" Content="Show the diagnostic panel (developer output)"
                           Foreground="#E6E9EF" Click="SettingChanged"/>
                 <TextBlock x:Name="SettingsNote" FontSize="11" Foreground="#6E7687" Margin="0,9,0,0"
                            TextWrapping="Wrap"/>

@@ -245,7 +245,18 @@ public partial class MainWindow : Window
         // Read from the registry rather than the settings file: that is where
         // the truth is, and somebody may have removed it by hand.
         OptAutostart.IsChecked = Autostart.IsEnabled();
+        OptDiagnostics.IsChecked = _settings.ShowDiagnostics;
+        ApplyDiagnosticsVisibility();
     }
+
+    /// <summary>
+    /// The panel is developer output, so it is hidden unless asked for. The
+    /// log file is written either way - that is what makes a test run
+    /// readable afterwards without anybody transcribing anything.
+    /// </summary>
+    private void ApplyDiagnosticsVisibility()
+        => Diagnostics.Visibility = _settings.ShowDiagnostics
+            ? Visibility.Visible : Visibility.Collapsed;
 
     private void SettingChanged(object sender, RoutedEventArgs e)
     {
@@ -259,8 +270,10 @@ public partial class MainWindow : Window
             SmurfDetection = OptSmurf.IsChecked == true,
             CloseToTray = OptCloseToTray.IsChecked == true,
             StartWithWindows = autostartOk && wanted,
+            ShowDiagnostics = OptDiagnostics.IsChecked == true,
         };
         _settings.Save();
+        ApplyDiagnosticsVisibility();
 
         if (!autostartOk)
         {

@@ -30,6 +30,17 @@ public sealed record UserSettings
     [JsonPropertyName("startWithWindows")]
     public bool StartWithWindows { get; init; }
 
+    /// <summary>
+    /// Show the diagnostic panel in the window.
+    ///
+    /// Off: it is developer output - which process holds focus, the roster
+    /// without names, what the loop decided. It is always written to
+    /// v3-preview.log either way, so turning this on is only about whether it
+    /// is on screen.
+    /// </summary>
+    [JsonPropertyName("showDiagnostics")]
+    public bool ShowDiagnostics { get; init; }
+
     public Game.Settings ToGameSettings() => Game.Settings.Default with
     {
         SmurfDetectionEnabled = SmurfDetection,
