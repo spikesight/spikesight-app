@@ -1,10 +1,8 @@
 using System.Diagnostics;
 using System.IO;
 using System.Text;
-using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
-using SpikeSight.Core;
 using SpikeSight.Core.Game;
 using SpikeSight.Core.Riot;
 using SpikeSight.Core.Windows;
@@ -19,7 +17,11 @@ public sealed record Row(
 public partial class MainWindow : Window
 {
     private readonly StringBuilder _diagnostics = new();
+    private readonly CancellationTokenSource _stopping = new();
+    private readonly LocalClient _local = new();
     private OverlayWindow? _overlay;
+    private MatchPoller? _poller;
+    private string _lastState = "";
 
     private static readonly string LogPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -28,12 +30,12 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        Loaded += async (_, _) => await StartAsync();
+        Loaded += (_, _) => Start();
     }
 
     private void Note(string text)
     {
-        _diagnostics.AppendLine(text);
+        _diagnostics.AppendLine($"{DateTime.Now:HH:mm:ss}  {text}");
         Diagnostics.Text = _diagnostics.ToString();
         try
         {
@@ -43,7 +45,7 @@ public partial class MainWindow : Window
         catch (IOException) { /* the window still has it */ }
     }
 
-    private async Task StartAsync()
+    private void Start()
     {
         // Who holds foreground now that our windows are up. If this still
         // names the game, nothing was taken.
@@ -61,70 +63,27 @@ public partial class MainWindow : Window
              + $"topmost={Win32.HasStyle(hwnd, Win32.WsExTopmost)} "
              + $"| processes=1");
 
-        await ConnectAsync();
+        _poller = new MatchPoller(_local);
+        // The loop runs off the UI thread; marshal each snapshot back onto it.
+        _poller.Updated += snapshot => Dispatcher.InvokeAsync(() => Show(snapshot));
+        _ = _poller.RunAsync(_stopping.Token);
     }
 
-    private async Task ConnectAsync()
+    private void Show(Snapshot snapshot)
     {
-        try
+        if (snapshot.Board is not { } board)
         {
-            using var local = new LocalClient();
-            var credentials = await local.GetCredentialsAsync();
-            var endpoints = await Endpoints.ResolveAsync(local);
-            using var remote = new RemoteClient(local, endpoints);
-            Note($"riot : {endpoints.Region}/{endpoints.Shard} {endpoints.ClientVersion}");
-
-            var core = await remote.CoregamePlayerAsync(credentials.Puuid);
-            var matchId = MatchId(core);
-            if (matchId is null)
-            {
-                MatchLine.Text = "In menus - queue up.";
-                _overlay?.Say("In menus - queue up.");
-                return;
-            }
-
-            if (await remote.CoregameMatchAsync(matchId) is not { } match) return;
-
-            if (!BoardBuilder.IsLobby(match))
-            {
-                // The Range, most likely: a game server session with nobody
-                // else in it, and so nothing to scout.
-                MatchLine.Text = "Nobody else here - the Range, probably.";
-                _overlay?.Say("In menus - queue up.");
-                return;
-            }
-
-            // MMR for everyone, then names for only those we may ask about.
-            var roster = match.GetProperty("Players").EnumerateArray().ToList();
-            var mmr = new Dictionary<string, JsonElement>();
-            var resolvable = new List<string>();
-            foreach (var entry in roster)
-            {
-                var puuid = entry.GetProperty("Subject").GetString() ?? "";
-                if (puuid.Length == 0) continue;
-                if (await remote.MmrAsync(puuid) is { } m) mmr[puuid] = m;
-
-                var identity = entry.TryGetProperty("PlayerIdentity", out var id) ? id : default;
-                if (!PrivacyFlags.FromIdentity(identity).Incognito) resolvable.Add(puuid);
-            }
-
-            var names = await remote.NamesAsync(resolvable);
-            Note($"roster: {roster.Count} players, {mmr.Count} with mmr, "
-                 + $"{names.Count} named, {roster.Count - resolvable.Count} incognito never asked about");
-
-            Render(BoardBuilder.Build(match, credentials.Puuid, mmr, names, currentActId: null));
+            MatchLine.Text = snapshot.Message;
+            Rows.ItemsSource = null;
+            _overlay?.Say(snapshot.Message);
+            if (snapshot.State != _lastState) Note($"state: {snapshot.State} - {snapshot.Message}");
+            _lastState = snapshot.State;
+            return;
         }
-        catch (SpikeSightException ex)
-        {
-            MatchLine.Text = ex.Message;
-            Note(ex.Hint.Length > 0 ? ex.Hint : ex.Message);
-            _overlay?.Say(ex.Message);
-        }
-    }
 
-    private void Render(Board board)
-    {
-        MatchLine.Text = $"{board.MapName}  -  {board.Label}";
+        MatchLine.Text = snapshot.Stale
+            ? $"{board.MapName}  -  {board.Label}  (over)"
+            : $"{board.MapName}  -  {board.Label}";
 
         var rows = new List<Row>();
         foreach (var side in board.Sides.Where(s => s.Players.Count > 0))
@@ -145,28 +104,29 @@ public partial class MainWindow : Window
                     RankBrush: Swatch(tier.Color)));
             }
         }
-
         Rows.ItemsSource = rows;
 
-        // Log the board without names, so a run can be checked afterwards
-        // without putting anyone's riot ID in a file.
-        foreach (var player in board.Players)
-        {
-            var tier = player.Rank.Resolved;
-            Note($"  {(player.IsSelf ? "you " : "    ")}{player.AgentName ?? "-",-10} "
-                 + $"{tier.Name,-12} lvl={(player.Level?.ToString() ?? (player.LevelHidden ? "hidden" : "-")),-6} "
-                 + $"{(player.Name.Hidden ? "INCOGNITO " + player.Name.HiddenId : "named")}");
-        }
         var first = board.Sides.First(s => s.Players.Count > 0);
         _overlay?.Say($"{first.Label}\n{rows.Count} players - {board.Label}");
+
+        if (snapshot.State == _lastState) return;
+        _lastState = snapshot.State;
+
+        var hidden = board.Players.Count(p => p.Flags.Incognito);
+        Note($"state: {snapshot.State} - {board.MapName}, {board.Label}, "
+             + $"{rows.Count} players, {hidden} incognito never asked about");
+        // Names stay out of the log; this is enough to check a run afterwards.
+        foreach (var player in board.Players)
+        {
+            Note($"    {(player.IsSelf ? "you " : "    ")}{player.AgentName ?? "-",-10} "
+                 + $"{player.Rank.Resolved.Name,-12} "
+                 + $"lvl={(player.Level?.ToString() ?? (player.LevelHidden ? "hidden" : "-")),-6} "
+                 + $"{(player.Name.Hidden ? "INCOGNITO " + player.Name.HiddenId : "named")}");
+        }
     }
 
     private static Brush Swatch(string hex)
         => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
-
-    private static string? MatchId(JsonElement? element)
-        => element is { ValueKind: JsonValueKind.Object } value
-           && value.TryGetProperty("MatchID", out var id) ? id.GetString() : null;
 
     private static string ProcessName(uint pid)
     {
@@ -177,6 +137,9 @@ public partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        _stopping.Cancel();
+        _poller?.Dispose();
+        _local.Dispose();
         _overlay?.Close();
         base.OnClosed(e);
     }

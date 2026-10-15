@@ -136,6 +136,15 @@ public sealed class RemoteClient : IDisposable
         => GetAsync($"{Endpoints.Pd}/match-details/v1/matches/{matchId}", allow404: true, ct: ct);
 
     /// <summary>
+    /// Seasons, events and disabled ids. Agent and map names left this
+    /// endpoint years ago and now ship with the app; the act timeline is the
+    /// reason to still ask.
+    /// </summary>
+    public Task<JsonElement?> ContentAsync(CancellationToken ct = default)
+        => GetAsync($"{Endpoints.Shared}/content-service/v3/content?locale=en-US",
+                    allow404: true, ct: ct);
+
+    /// <summary>
     /// Batched riot ID lookup.
     ///
     /// Callers MUST drop incognito players before calling this. SpikeSight

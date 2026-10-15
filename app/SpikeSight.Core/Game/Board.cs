@@ -73,18 +73,26 @@ public static class BoardBuilder
         IReadOnlyDictionary<string, JsonElement> mmrByPuuid,
         IReadOnlyDictionary<string, (string GameName, string TagLine)> names,
         string? currentActId,
-        GameContent? content = null)
+        GameContent? content = null,
+        string state = "INGAME")
     {
         content ??= GameContent.Bundled;
 
+        // Agent select hands over only your own side; the enemy team is not
+        // in the payload at all until the match starts.
         var entries = match.TryGetProperty("Players", out var list)
                       && list.ValueKind == JsonValueKind.Array
             ? list.EnumerateArray().ToList()
-            : [];
+            : match.TryGetProperty("AllyTeam", out var allyTeam)
+              && allyTeam.ValueKind == JsonValueKind.Object
+              && allyTeam.TryGetProperty("Players", out var allyPlayers)
+              && allyPlayers.ValueKind == JsonValueKind.Array
+                ? allyPlayers.EnumerateArray().ToList()
+                : [];
 
-        var ownTeam = entries
-            .FirstOrDefault(p => Str(p, "Subject") == selfPuuid) is { ValueKind: JsonValueKind.Object } me
-            ? Str(me, "TeamID") : "";
+        var ownTeam = state == "PREGAME" ? "ally"
+            : entries.FirstOrDefault(p => Str(p, "Subject") == selfPuuid)
+                is { ValueKind: JsonValueKind.Object } me ? Str(me, "TeamID") : "";
 
         var players = new List<BoardPlayer>();
         foreach (var entry in entries)
@@ -103,7 +111,10 @@ public static class BoardBuilder
             // about. Passing the dictionary here cannot leak one.
             var record = names.TryGetValue(puuid, out var n) ? n : ((string, string)?)null;
 
+            // Pregame entries carry no TeamID: everyone in that payload is
+            // on your side by definition.
             var team = Str(entry, "TeamID");
+            if (team.Length == 0 && state == "PREGAME") team = "ally";
             players.Add(new BoardPlayer(
                 Puuid: puuid,
                 Team: team,
@@ -137,18 +148,25 @@ public static class BoardBuilder
             // Free-for-all modes put the whole lobby on one team id, so
             // everyone lands on our side with nobody opposite. They are not
             // team mates - in Deathmatch every one of them is shooting at you.
-            new("ally", enemy.Count > 0 ? "Your team" : "Everyone in this match", ally),
+            // Agent select is the other way round: the enemy exists, we just
+            // cannot see them yet, so they stay "your team".
+            new("ally", enemy.Count > 0 || state == "PREGAME"
+                ? "Your team" : "Everyone in this match", ally),
             new("enemy", twoTeams ? "Enemy team" : "Everyone else", enemy),
         };
 
         var matchmaking = match.TryGetProperty("MatchmakingData", out var mm)
                           && mm.ValueKind == JsonValueKind.Object ? mm : (JsonElement?)null;
-        var queue = matchmaking is { } data ? Str(data, "QueueID") : "";
+        var queue = matchmaking is { } data ? Str(data, "QueueID") : Str(match, "QueueID");
+        var modeId = Str(match, "ModeID");
+        var mode = modeId.Length > 0 ? modeId : Str(match, "Mode");
+        var flow = Str(match, "ProvisioningFlow");
+        var provisioning = flow.Length > 0 ? flow : Str(match, "ProvisioningFlowID");
 
         return new Board(
-            State: "INGAME",
+            State: state,
             MapName: content.MapName(Str(match, "MapID")) ?? "Unknown map",
-            Label: Modes.Label(queue, Str(match, "ModeID"), Str(match, "ProvisioningFlow")),
+            Label: Modes.Label(queue, mode, provisioning),
             IsRanked: queue == "competitive",
             Sides: sides);
     }
