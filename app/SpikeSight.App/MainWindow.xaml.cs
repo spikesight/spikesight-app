@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Media;
 using SpikeSight.Core.Game;
 using SpikeSight.Core.Riot;
+using SpikeSight.Core.Store;
 using SpikeSight.Core.Windows;
 
 namespace SpikeSight.App;
@@ -13,13 +14,14 @@ namespace SpikeSight.App;
 public sealed record Row(
     string Agent, string Name, string Rank, string Peak, string Level,
     bool IsSelf, Brush NameBrush, Brush RankBrush,
-    string Form = "", string Smurf = "");
+    string Form = "", string Smurf = "", string Party = "");
 
 public partial class MainWindow : Window
 {
     private readonly StringBuilder _diagnostics = new();
     private readonly CancellationTokenSource _stopping = new();
     private readonly LocalClient _local = new();
+    private readonly NotesStore _notes = new(Paths.NotesDb);
     private OverlayWindow? _overlay;
     private MatchPoller? _poller;
     private string _lastState = "";
@@ -65,7 +67,8 @@ public partial class MainWindow : Window
              + $"topmost={Win32.HasStyle(hwnd, Win32.WsExTopmost)} "
              + $"| processes=1");
 
-        _poller = new MatchPoller(_local);
+        _poller = new MatchPoller(_local) { Notes = _notes };
+        _poller.Warned += message => Dispatcher.InvokeAsync(() => Note(message));
         // The loop runs off the UI thread; marshal each snapshot back onto it.
         _poller.Updated += snapshot => Dispatcher.InvokeAsync(() => Show(snapshot));
         _ = _poller.RunAsync(_stopping.Token);
@@ -114,7 +117,9 @@ public partial class MainWindow : Window
                     // Only scores worth acting on: a middling one was never a
                     // reason to play differently.
                     Smurf: player.Smurf is { Flagged: true } verdict
-                        ? $"SMURF {verdict.Score}" : ""));
+                        ? $"SMURF {verdict.Score}" : "",
+                    Party: player.Party is { } party
+                        ? $"{party.Size}-STACK{(party.Confidence == "likely" ? "?" : "")}" : ""));
             }
         }
         Rows.ItemsSource = rows;
@@ -143,7 +148,10 @@ public partial class MainWindow : Window
             Note($"    {(player.IsSelf ? "you " : "    ")}{player.AgentName ?? "-",-10} "
                  + $"{player.Rank.Resolved.Name,-12} "
                  + $"lvl={(player.Level?.ToString() ?? (player.LevelHidden ? "hidden" : "-")),-6} "
-                 + $"{(player.Name.Hidden ? "INCOGNITO " + player.Name.HiddenId : "named")}");
+                 + $"{(player.Name.Hidden ? "INCOGNITO " + player.Name.HiddenId : "named")}"
+                 + $"{(player.Party is { } p ? $"  {p.Size}-stack/{p.Confidence}" : "")}"
+                 + $"{(player.Smurf is { Flagged: true } v ? $"  SMURF {v.Score}" : "")}"
+                 + $"{(player.Stats is { Matches: > 0 } st ? $"  {st.Kd:F2}kd {st.Acs}acs {st.Performance}ps" : "")}");
         }
     }
 
@@ -170,6 +178,7 @@ public partial class MainWindow : Window
     {
         _stopping.Cancel();
         _poller?.Dispose();
+        _notes.Dispose();
         _local.Dispose();
         _overlay?.Close();
         base.OnClosed(e);

@@ -40,7 +40,7 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="104"/>
                 <ColumnDefinition Width="150"/>
-                <ColumnDefinition Width="86"/>
+                <ColumnDefinition Width="150"/>
                 <ColumnDefinition Width="54"/>
             </Grid.ColumnDefinitions>
             <TextBlock Grid.Column="0" Text="AGENT"  FontSize="10" Foreground="#6E7687"/>
@@ -74,7 +74,7 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="104"/>
                                     <ColumnDefinition Width="150"/>
-                                    <ColumnDefinition Width="86"/>
+                                    <ColumnDefinition Width="150"/>
                                     <ColumnDefinition Width="54"/>
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{Binding Agent}" FontSize="12"
@@ -85,8 +85,13 @@
                                            Foreground="{Binding RankBrush}"/>
                                 <TextBlock Grid.Column="3" Text="{Binding Form}" FontSize="12"
                                            Foreground="#C8CEDA"/>
-                                <TextBlock Grid.Column="4" Text="{Binding Smurf}" FontSize="11"
-                                           FontWeight="Bold" Foreground="#FF4655"/>
+                                <StackPanel Grid.Column="4" Orientation="Horizontal">
+                                    <TextBlock Text="{Binding Party}" FontSize="11"
+                                               FontWeight="Bold" Foreground="#2FB3A4"
+                                               Margin="0,0,8,0"/>
+                                    <TextBlock Text="{Binding Smurf}" FontSize="11"
+                                               FontWeight="Bold" Foreground="#FF4655"/>
+                                </StackPanel>
                                 <TextBlock Grid.Column="5" Text="{Binding Level}" FontSize="12"
                                            Foreground="#98A1B3" HorizontalAlignment="Right"/>
                             </Grid>

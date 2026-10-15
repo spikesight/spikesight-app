@@ -33,12 +33,25 @@ public sealed class MatchPoller : IDisposable
     /// rest of the lobby - which is exactly what 2.x did until 2.2.2.
     /// </summary>
     private (string MatchId, IReadOnlyDictionary<string, PlayerStats> Stats)? _form;
+    private StatsResult? _lastStats;
+
+    /// <summary>
+    /// A match in progress, held until it ends.
+    ///
+    /// Agent select is never held here: a lobby you back out of must leave no
+    /// trace, or the encounter history starts lying about who you have played
+    /// with.
+    /// </summary>
+    private (Board Board, string MatchId)? _pending;
 
     public MatchPoller(LocalClient local, Func<double>? now = null)
     {
         _local = local;
         _now = now ?? (() => Environment.TickCount64 / 1000.0);
     }
+
+    /// <summary>Where encounters are recorded, once a match has ended.</summary>
+    public Store.NotesStore? Notes { get; init; }
 
     public event Action<Snapshot>? Updated;
 
@@ -131,6 +144,7 @@ public sealed class MatchPoller : IDisposable
                 return;
 
             case PollAction.Menus:
+                await FinishMatchAsync(ct);
                 _plan.BackToMenus();
                 Publish(_last.Board is null
                     ? new Snapshot("MENUS", null, "In menus - queue up.")
@@ -176,6 +190,7 @@ public sealed class MatchPoller : IDisposable
 
         if (matchId is null)
         {
+            await FinishMatchAsync(ct);
             _plan.BackToMenus();
             Publish(_last.Board is null
                 ? new Snapshot("MENUS", null, "In menus - queue up.")
@@ -200,7 +215,13 @@ public sealed class MatchPoller : IDisposable
         }
 
         var fresh = matchId != _form?.MatchId;
-        if (fresh) _form = null;
+        if (fresh)
+        {
+            // Moved on to a different match: bank the previous one first.
+            if (_pending is { } held && held.MatchId != matchId) await FinishMatchAsync(ct);
+            _form = null;
+            _lastStats = null;
+        }
 
         // Quick pass: ranks and names, on screen straight away.
         Publish(new Snapshot(state, await BuildAsync(remote, payload, puuid, state, ct), ""));
@@ -223,6 +244,7 @@ public sealed class MatchPoller : IDisposable
 
         if (_plan.MatchId != matchId) return;   // moved on while we were reading
         _form = (matchId, result.Players);
+        _lastStats = result;
         Publish(new Snapshot(state, await BuildAsync(remote, payload, puuid, state, ct), ""));
     }
 
@@ -248,9 +270,31 @@ public sealed class MatchPoller : IDisposable
         // Incognito players are not in this list, so they are never asked about.
         var names = await remote.NamesAsync(resolvable, ct);
 
-        return BoardBuilder.Build(
+        // Party ids the local client already publishes, free of charge. Riot
+        // will not answer about anyone outside our own party, so this is the
+        // only confirmed source there is.
+        var partyIds = new Dictionary<string, string>();
+        var presenceNames = new Dictionary<string, (string, string)>();
+        try
+        {
+            foreach (var presence in await _local.GetPresencesAsync(ct))
+            {
+                if (presence.Puuid.Length == 0) continue;
+                if (presence.PartyId.Length > 0) partyIds[presence.Puuid] = presence.PartyId;
+                if (presence.GameName.Length > 0)
+                    presenceNames[presence.Puuid] = (presence.GameName, presence.GameTag);
+            }
+        }
+        catch (SpikeSightException) { /* inference still works without it */ }
+
+        var usable = _form?.MatchId == _plan.MatchId;
+        var board = BoardBuilder.Build(
             match, selfPuuid, mmr, names, _acts.Current?.Id, state: state,
-            stats: _form?.MatchId == _plan.MatchId ? _form?.Stats : null);
+            stats: usable ? _form?.Stats : null,
+            partyIds: partyIds,
+            coParty: usable ? _lastStats?.CoParty : null,
+            coParties: usable ? _lastStats?.CoParties : null);
+        return board;
     }
 
     private static string Explain(RemoteException ex) => ex.Status switch
@@ -259,6 +303,33 @@ public sealed class MatchPoller : IDisposable
         _ when ex.Hint.Length > 0 => ex.Hint,
         _ => ex.Message,
     };
+
+    /// <summary>
+    /// A live match ended - now, and only now, log who was in it.
+    ///
+    /// This is what keeps dodges out of the history: agent-select rosters are
+    /// never banked, so a lobby you back out of was never an encounter.
+    /// </summary>
+    private async Task FinishMatchAsync(CancellationToken ct)
+    {
+        if (_pending is not { } held || Notes is null) { _pending = null; return; }
+        _pending = null;
+
+        foreach (var player in held.Board.Players)
+        {
+            if (player.IsSelf || player.Puuid.Length == 0) continue;
+            try
+            {
+                await Notes.RecordEncounterAsync(
+                    player.Puuid, held.MatchId, player.Side,
+                    player.AgentName, held.Board.MapName, held.Board.Label, ct);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                return;   // bookkeeping must never break the loop
+            }
+        }
+    }
 
     private static IEnumerable<string> Roster(JsonElement match, string state)
     {
@@ -299,6 +370,13 @@ public sealed class MatchPoller : IDisposable
     private void Publish(Snapshot snapshot)
     {
         _last = snapshot;
+        // Held until the match ends; see FinishMatchAsync. Only a live match
+        // counts, which is what keeps a dodged lobby out of the history.
+        if (snapshot is { State: "INGAME", Stale: false, Board: { } board }
+            && _plan.MatchId is { Length: > 0 } matchId)
+        {
+            _pending = (board, matchId);
+        }
         Updated?.Invoke(snapshot);
     }
 

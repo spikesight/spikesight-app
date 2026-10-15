@@ -15,7 +15,8 @@ public sealed record BoardPlayer(
     int? Level,
     bool IsSelf,
     SmurfVerdict? Smurf = null,
-    PlayerStats? Stats = null)
+    PlayerStats? Stats = null,
+    PartyAssignment? Party = null)
 {
     public bool LevelHidden => Flags.HideAccountLevel;
     public double? RatingPoints => Rank.Points;
@@ -79,7 +80,10 @@ public static class BoardBuilder
         GameContent? content = null,
         string state = "INGAME",
         Settings? settings = null,
-        IReadOnlyDictionary<string, PlayerStats>? stats = null)
+        IReadOnlyDictionary<string, PlayerStats>? stats = null,
+        IReadOnlyDictionary<string, string>? partyIds = null,
+        IReadOnlyDictionary<(string, string), int>? coParty = null,
+        IReadOnlyDictionary<string, int>? coParties = null)
     {
         content ??= GameContent.Bundled;
         settings ??= Settings.Default;
@@ -99,6 +103,19 @@ public static class BoardBuilder
         var ownTeam = state == "PREGAME" ? "ally"
             : entries.FirstOrDefault(p => Str(p, "Subject") == selfPuuid)
                 is { ValueKind: JsonValueKind.Object } me ? Str(me, "TeamID") : "";
+
+        var teams = new Dictionary<string, List<string>>();
+        foreach (var entry in entries)
+        {
+            var who = Str(entry, "Subject");
+            if (who.Length == 0) continue;
+            var side = Str(entry, "TeamID") is { Length: > 0 } t ? t : "ally";
+            if (!teams.TryGetValue(side, out var roster)) teams[side] = roster = [];
+            roster.Add(who);
+        }
+
+        var parties = Parties.Detect(
+            teams, partyIds ?? new Dictionary<string, string>(), coParty, coParties);
 
         var players = new List<BoardPlayer>();
         foreach (var entry in entries)
@@ -147,7 +164,8 @@ public static class BoardBuilder
                     settings, level, flags.HideAccountLevel,
                     rank.Tier, peak?.Tier, act.Games, act.Wins,
                     form?.Kd, form?.Matches ?? 0, form?.RecentWinrate),
-                Stats: form));
+                Stats: form,
+                Party: parties.GetValueOrDefault(puuid)));
         }
 
         players.Sort((a, b) =>
