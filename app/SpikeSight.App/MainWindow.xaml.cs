@@ -4,6 +4,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using SpikeSight.Core;
 using SpikeSight.Core.Game;
 using SpikeSight.Core.Riot;
 using SpikeSight.Core.Store;
@@ -37,6 +38,7 @@ public partial class MainWindow : Window
     private OverlayWindow? _overlay;
     private MatchPoller? _poller;
     private string _lastState = "";
+    private Board? _board;
     private bool _loggedForm;
 
     private static readonly string LogPath = Path.Combine(
@@ -92,6 +94,7 @@ public partial class MainWindow : Window
             quit: () => Dispatcher.InvokeAsync(() => { _reallyQuitting = true; Close(); }));
 
         ShowSettings();
+        _ = CheckForUpdateAsync();
         _poller = new MatchPoller(_local)
         {
             Notes = _notes,
@@ -117,6 +120,7 @@ public partial class MainWindow : Window
             return;
         }
 
+        _board = board;
         MatchLine.Text = snapshot.Stale
             ? $"{board.MapName}  -  {board.Label}  (over)"
             : $"{board.MapName}  -  {board.Label}";
@@ -227,10 +231,17 @@ public partial class MainWindow : Window
         if (sender is not MenuItem { Tag: string tag } item) return;
         if (item.Parent is not ContextMenu { PlacementTarget: FrameworkElement { Tag: string puuid } })
             return;
-        if (puuid.Length == 0 || !int.TryParse(tag, out var severity)) return;
+        if (puuid.Length == 0) return;
 
         try
         {
+            if (tag == "note")
+            {
+                await AddNoteWithTextAsync(puuid);
+                return;
+            }
+            if (!int.TryParse(tag, out var severity)) return;
+
             if (severity == 0)
             {
                 var existing = await _notes.NotesForAsync([puuid], _stopping.Token);
@@ -316,6 +327,55 @@ public partial class MainWindow : Window
         }
 
         if (!_settings.OverlayEnabled) _overlay?.HidePanel();
+    }
+
+    /// <summary>
+    /// Flag somebody with a reason attached.
+    ///
+    /// A severity on its own says you did not want to see them again; the
+    /// text is what tells you why, three weeks later, when the name means
+    /// nothing.
+    /// </summary>
+    private async Task AddNoteWithTextAsync(string puuid)
+    {
+        var player = _board?.Players.FirstOrDefault(p => p.Puuid == puuid);
+        var who = player?.Name.Hidden == false && player.Name.Display.Length > 0
+            ? player.Name.Display
+            : $"#{Privacy.HiddenTag(puuid)}";
+        var context = player is null
+            ? "From your encounter history."
+            : $"{player.AgentName ?? "unknown agent"} - {player.Rank.Resolved.Name}";
+
+        var dialog = new NoteDialog(who, context) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+
+        await _notes.AddNoteAsync(puuid, dialog.Severity, dialog.Body, dialog.Tags,
+                                  _stopping.Token);
+        Note($"flagged {who} as {dialog.Severity}"
+             + (dialog.Body.Length > 0 ? " with a note" : ""));
+        _poller?.RefreshNotes();
+        if (MetView.Visibility == Visibility.Visible) await LoadMetAsync();
+    }
+
+    private string? _releaseUrl;
+
+    private async Task CheckForUpdateAsync()
+    {
+        var info = await new UpdateCheck().CheckAsync(_stopping.Token);
+        if (!info.Available || info.Latest is null) return;
+
+        _releaseUrl = info.Url;
+        UpdateText.Text = $"SpikeSight {info.Latest.TrimStart('v')} is out - you have {info.Current}.";
+        UpdateBar.Visibility = Visibility.Visible;
+        Note($"update available: {info.Latest}");
+    }
+
+    private void OpenRelease(object sender, RoutedEventArgs e)
+    {
+        if (_releaseUrl is not { Length: > 0 } url) return;
+        // The download is always the user's click; this opens a page and
+        // nothing else.
+        Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
     }
 
     /// <summary>Lobby, history or encounters. Each loads when first opened.</summary>
