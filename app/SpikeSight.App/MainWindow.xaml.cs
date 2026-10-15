@@ -72,6 +72,13 @@ public partial class MainWindow : Window
              + $"topmost={Win32.HasStyle(hwnd, Win32.WsExTopmost)} "
              + $"| processes=1");
 
+        // Bring across 2.x's flags and history, once, read-only.
+        var imported = LegacyImport.ImportIfEmpty(_notes);
+        if (imported.Anything)
+            Note($"imported {imported.Notes} notes and {imported.Encounters} encounters from 2.x");
+        else if (imported.Error is { Length: > 0 } problem)
+            Note($"could not read 2.x's notes ({problem}); starting empty");
+
         _tray = new TrayIcon(
             show: () => Dispatcher.InvokeAsync(Reveal),
             quit: () => Dispatcher.InvokeAsync(() => { _reallyQuitting = true; Close(); }));

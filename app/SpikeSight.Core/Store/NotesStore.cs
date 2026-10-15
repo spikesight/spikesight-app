@@ -115,6 +115,53 @@ public sealed class NotesStore : IDisposable
         finally { _gate.Release(); }
     }
 
+    /// <summary>Nothing recorded yet, so an import cannot duplicate anything.</summary>
+    public bool IsEmpty()
+    {
+        using var command = _db.CreateCommand();
+        command.CommandText =
+            "SELECT (SELECT COUNT(*) FROM notes) + (SELECT COUNT(*) FROM encounters)";
+        return Convert.ToInt64(command.ExecuteScalar()) == 0;
+    }
+
+    /// <summary>Insert a note keeping its original timestamp. Import only.</summary>
+    public void InsertImportedNote(
+        string puuid, Severity severity, string text, IEnumerable<string> tags, long created)
+    {
+        using var command = _db.CreateCommand();
+        command.CommandText = """
+            INSERT INTO notes (puuid, severity, text, tags, created, updated)
+            VALUES ($puuid, $severity, $text, $tags, $created, $created)
+            """;
+        command.Parameters.AddWithValue("$puuid", puuid);
+        command.Parameters.AddWithValue("$severity", (int)severity);
+        command.Parameters.AddWithValue("$text", text);
+        command.Parameters.AddWithValue("$tags", string.Join(',', tags));
+        command.Parameters.AddWithValue("$created", created);
+        command.ExecuteNonQuery();
+    }
+
+    /// <summary>Insert an encounter keeping when it happened. Import only.</summary>
+    public void InsertImportedEncounter(
+        string puuid, string matchId, long seen, string relation,
+        string? agent, string? mapName, string? queue)
+    {
+        using var command = _db.CreateCommand();
+        command.CommandText = """
+            INSERT INTO encounters (puuid, match_id, seen, relation, agent, map_name, queue)
+            VALUES ($puuid, $match, $seen, $relation, $agent, $map, $queue)
+            ON CONFLICT(puuid, match_id) DO NOTHING
+            """;
+        command.Parameters.AddWithValue("$puuid", puuid);
+        command.Parameters.AddWithValue("$match", matchId);
+        command.Parameters.AddWithValue("$seen", seen);
+        command.Parameters.AddWithValue("$relation", relation);
+        command.Parameters.AddWithValue("$agent", (object?)agent ?? DBNull.Value);
+        command.Parameters.AddWithValue("$map", (object?)mapName ?? DBNull.Value);
+        command.Parameters.AddWithValue("$queue", (object?)queue ?? DBNull.Value);
+        command.ExecuteNonQuery();
+    }
+
     private static long Now() => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
     private static DateTimeOffset At(long seconds) => DateTimeOffset.FromUnixTimeSeconds(seconds);
 
