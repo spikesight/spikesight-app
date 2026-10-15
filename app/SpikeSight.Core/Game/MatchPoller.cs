@@ -112,7 +112,29 @@ public sealed class MatchPoller : IDisposable
                 Publish(new Snapshot("DISCONNECTED", null, ex.Hint.Length > 0 ? ex.Hint : ex.Message));
                 delay = IdleDelay;
             }
-            catch (OperationCanceledException) { return; }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                return;   // shutting down, which is the only reason to stop
+            }
+            catch (OperationCanceledException)
+            {
+                // A request timed out. HttpClient reports that as a
+                // TaskCanceledException, which is an OperationCanceledException
+                // - so catching that broadly used to kill the loop outright on
+                // one slow request, leaving the window showing whatever it last
+                // knew with no crash and nothing in the log.
+                Warned?.Invoke("A request to Riot timed out; still watching.");
+                delay = IdleDelay;
+            }
+            catch (Exception ex)
+            {
+                // Nothing may kill this loop except shutdown. A scoreboard
+                // that silently stops updating is worse than one that says it
+                // broke, because the stale board still looks live.
+                Warned?.Invoke($"Polling hit an unexpected error ({ex.GetType().Name}); "
+                               + "still watching.");
+                delay = IdleDelay;
+            }
 
             try { await Task.Delay(delay, ct); }
             catch (OperationCanceledException) { return; }
