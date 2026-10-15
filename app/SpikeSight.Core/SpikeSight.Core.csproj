@@ -13,4 +13,8 @@
     <EmbeddedResource Include="Data/maps.json" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.*" />
+  </ItemGroup>
+
 </Project>
