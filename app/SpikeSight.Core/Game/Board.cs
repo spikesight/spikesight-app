@@ -13,7 +13,8 @@ public sealed record BoardPlayer(
     RankView Rank,
     (int Tier, string ActId)? Peak,
     int? Level,
-    bool IsSelf)
+    bool IsSelf,
+    SmurfVerdict? Smurf = null)
 {
     public bool LevelHidden => Flags.HideAccountLevel;
     public double? RatingPoints => Rank.Points;
@@ -26,7 +27,8 @@ public sealed record Board(
     string MapName,
     string Label,
     bool IsRanked,
-    IReadOnlyList<BoardSide> Sides)
+    IReadOnlyList<BoardSide> Sides,
+    WinProbability? WinProbability = null)
 {
     public IEnumerable<BoardPlayer> Players => Sides.SelectMany(s => s.Players);
 }
@@ -74,9 +76,11 @@ public static class BoardBuilder
         IReadOnlyDictionary<string, (string GameName, string TagLine)> names,
         string? currentActId,
         GameContent? content = null,
-        string state = "INGAME")
+        string state = "INGAME",
+        Settings? settings = null)
     {
         content ??= GameContent.Bundled;
+        settings ??= Settings.Default;
 
         // Agent select hands over only your own side; the enemy team is not
         // in the payload at all until the match starts.
@@ -115,6 +119,12 @@ public static class BoardBuilder
             // on your side by definition.
             var team = Str(entry, "TeamID");
             if (team.Length == 0 && state == "PREGAME") team = "ally";
+
+            var rank = MmrView.CurrentRank(mmr, seasons, currentActId);
+            var peak = flags.ActRankHidden ? null : MmrView.Peak(seasons);
+            var level = flags.HideAccountLevel || identity is not { } ident
+                ? null : IntOrNull(ident, "AccountLevel");
+            var act = MmrView.ActRecord(seasons, currentActId);
             players.Add(new BoardPlayer(
                 Puuid: puuid,
                 Team: team,
@@ -122,13 +132,17 @@ public static class BoardBuilder
                 Name: Privacy.BuildDisplayName(flags, record, agent, puuid),
                 AgentName: agent,
                 Flags: flags,
-                Rank: MmrView.CurrentRank(mmr, seasons, currentActId),
+                Rank: rank,
                 // Peak comes from the act rank badge, so a player who hid
                 // theirs has none to show.
-                Peak: flags.ActRankHidden ? null : MmrView.Peak(seasons),
-                Level: flags.HideAccountLevel || identity is not { } ident
-                    ? null : IntOrNull(ident, "AccountLevel"),
-                IsSelf: puuid == selfPuuid));
+                Peak: peak,
+                Level: level,
+                IsSelf: puuid == selfPuuid,
+                // A hidden level is passed as hidden, never as a number: the
+                // scorer leaves it out rather than guessing at it.
+                Smurf: Smurf.Evaluate(
+                    settings, level, flags.HideAccountLevel,
+                    rank.Tier, peak?.Tier, act.Games, act.Wins)));
         }
 
         players.Sort((a, b) =>
@@ -163,11 +177,18 @@ public static class BoardBuilder
         var flow = Str(match, "ProvisioningFlow");
         var provisioning = flow.Length > 0 ? flow : Str(match, "ProvisioningFlowID");
 
+        var odds = twoTeams
+            ? WinProbabilityEstimate.Estimate(settings,
+                ally.Select(p => new WinProbabilityEstimate.Entry(p.RatingPoints, null)).ToList(),
+                enemy.Select(p => new WinProbabilityEstimate.Entry(p.RatingPoints, null)).ToList())
+            : null;
+
         return new Board(
             State: state,
             MapName: content.MapName(Str(match, "MapID")) ?? "Unknown map",
             Label: Modes.Label(queue, mode, provisioning),
             IsRanked: queue == "competitive",
-            Sides: sides);
+            Sides: sides,
+            WinProbability: odds);
     }
 }
