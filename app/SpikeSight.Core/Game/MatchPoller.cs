@@ -383,6 +383,12 @@ public sealed class MatchPoller : IDisposable
                 await Notes.RecordEncounterAsync(
                     player.Puuid, held.MatchId, player.Side,
                     player.AgentName, held.Board.MapName, held.Board.Label, ct);
+
+                // Only what we were allowed to see. An incognito player is
+                // stored as a puuid and nothing else, for ever.
+                var (name, tag) = Privacy.StorableAlias(player.Flags, player.Name);
+                if (name is { Length: > 0 })
+                    await Notes.RememberNameAsync(player.Puuid, name, tag, ct);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

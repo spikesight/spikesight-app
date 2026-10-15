@@ -14,7 +14,14 @@ public sealed record EncounterSummary(int Count, int Ally, int Enemy, DateTimeOf
 /// <summary>A player you have met before, for the encounters list.</summary>
 public sealed record MetPlayer(
     string Puuid, int Met, int Ally, int Enemy, DateTimeOffset LastSeen,
-    Severity? WorstNote, int Notes);
+    Severity? WorstNote, int Notes,
+    string? GameName = null, string? TagLine = null, string? LastAgent = null)
+{
+    /// <summary>Their riot ID, or nothing when they were never nameable.</summary>
+    public string? RiotId => GameName is { Length: > 0 }
+        ? TagLine is { Length: > 0 } ? $"{GameName}#{TagLine}" : GameName
+        : null;
+}
 
 /// <summary>
 /// Your own notes on players, and a record of who you have actually met.
@@ -92,6 +99,17 @@ public sealed class NotesStore : IDisposable
             """);
         Execute("CREATE INDEX IF NOT EXISTS encounters_puuid ON encounters(puuid)");
         Execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
+        // Last riot ID we were allowed to see for a player, so the encounters
+        // list reads as people rather than as codes. Nothing is written here
+        // for anybody in Streamer Mode - see Privacy.StorableAlias.
+        Execute("""
+            CREATE TABLE IF NOT EXISTS players (
+              puuid     TEXT PRIMARY KEY,
+              game_name TEXT,
+              tag_line  TEXT,
+              seen      INTEGER NOT NULL
+            )
+            """);
     }
 
     /// <summary>
@@ -207,6 +225,23 @@ public sealed class NotesStore : IDisposable
         command.ExecuteNonQuery();
     }
 
+    /// <summary>Insert a remembered name during an import. Import only.</summary>
+    public void InsertImportedName(string puuid, string? gameName, string? tagLine)
+    {
+        if (puuid.Length == 0 || gameName is not { Length: > 0 }) return;
+        using var command = _db.CreateCommand();
+        command.CommandText = """
+            INSERT INTO players (puuid, game_name, tag_line, seen)
+            VALUES ($puuid, $name, $tag, $now)
+            ON CONFLICT(puuid) DO NOTHING
+            """;
+        command.Parameters.AddWithValue("$puuid", puuid);
+        command.Parameters.AddWithValue("$name", gameName);
+        command.Parameters.AddWithValue("$tag", (object?)tagLine ?? DBNull.Value);
+        command.Parameters.AddWithValue("$now", Now());
+        command.ExecuteNonQuery();
+    }
+
     private static long Now() => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
     private static DateTimeOffset At(long seconds) => DateTimeOffset.FromUnixTimeSeconds(seconds);
 
@@ -279,6 +314,35 @@ public sealed class NotesStore : IDisposable
     /// a lobby you dodged was not an encounter, and logging it would make the
     /// history lie.
     /// </summary>
+    /// <summary>
+    /// Remember what a player was called, when we are allowed to.
+    ///
+    /// Nothing is stored for somebody in Streamer Mode: their row stays a
+    /// puuid and a code, which is the point - the note still follows them
+    /// without the database recording who they are.
+    /// </summary>
+    public Task RememberNameAsync(
+        string puuid, string? gameName, string? tagLine, CancellationToken ct = default)
+        => LockedAsync<object?>(() =>
+        {
+            if (puuid.Length == 0 || gameName is not { Length: > 0 }) return null;
+            using var command = _db.CreateCommand();
+            command.CommandText = """
+                INSERT INTO players (puuid, game_name, tag_line, seen)
+                VALUES ($puuid, $name, $tag, $now)
+                ON CONFLICT(puuid) DO UPDATE SET
+                    game_name = excluded.game_name,
+                    tag_line  = excluded.tag_line,
+                    seen      = excluded.seen
+                """;
+            command.Parameters.AddWithValue("$puuid", puuid);
+            command.Parameters.AddWithValue("$name", gameName);
+            command.Parameters.AddWithValue("$tag", (object?)tagLine ?? DBNull.Value);
+            command.Parameters.AddWithValue("$now", Now());
+            command.ExecuteNonQuery();
+            return null;
+        }, ct);
+
     public Task RecordEncounterAsync(
         string puuid, string matchId, string relation,
         string? agent = null, string? mapName = null, string? queue = null,
@@ -353,8 +417,12 @@ public sealed class NotesStore : IDisposable
                        SUM(e.relation = 'enemy')       AS enemy,
                        MAX(e.seen)                     AS last_seen,
                        (SELECT MAX(severity) FROM notes n WHERE n.puuid = e.puuid) AS worst,
-                       (SELECT COUNT(*)      FROM notes n WHERE n.puuid = e.puuid) AS notes
+                       (SELECT COUNT(*)      FROM notes n WHERE n.puuid = e.puuid) AS notes,
+                       p.game_name, p.tag_line,
+                       (SELECT agent FROM encounters a WHERE a.puuid = e.puuid
+                        ORDER BY a.seen DESC LIMIT 1) AS last_agent
                 FROM encounters e
+                LEFT JOIN players p ON p.puuid = e.puuid
                 GROUP BY e.puuid
                 ORDER BY last_seen DESC
                 LIMIT $limit
@@ -372,7 +440,10 @@ public sealed class NotesStore : IDisposable
                     reader.GetInt32(3),
                     At(reader.GetInt64(4)),
                     reader.IsDBNull(5) ? null : (Severity)reader.GetInt32(5),
-                    reader.GetInt32(6)));
+                    reader.GetInt32(6),
+                    reader.IsDBNull(7) ? null : reader.GetString(7),
+                    reader.IsDBNull(8) ? null : reader.GetString(8),
+                    reader.IsDBNull(9) ? null : reader.GetString(9)));
             }
             return people;
         }, ct);

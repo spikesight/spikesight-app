@@ -119,11 +119,12 @@
 
     <Grid Margin="24,18,24,16">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>   <!-- header -->
+            <RowDefinition Height="Auto"/>   <!-- settings, when open -->
+            <RowDefinition Height="Auto"/>   <!-- status and odds -->
+            <RowDefinition Height="Auto"/>   <!-- notices -->
+            <RowDefinition Height="*"/>      <!-- the view -->
+            <RowDefinition Height="Auto"/>   <!-- diagnostics -->
         </Grid.RowDefinitions>
 
         <!-- ===================== HEADER ===================== -->
@@ -178,7 +179,7 @@
         </Border>
 
         <!-- ===================== STATUS ===================== -->
-        <StackPanel Grid.Row="1" x:Name="StatusRow" Margin="0,0,0,16">
+        <StackPanel Grid.Row="2" x:Name="StatusRow" Margin="0,0,0,16">
             <StackPanel Orientation="Horizontal">
                 <TextBlock x:Name="MatchLine" Style="{StaticResource T.Title}"/>
                 <TextBlock x:Name="MatchSub" Style="{StaticResource T.Caption}" Margin="14,3,0,0"/>
@@ -207,7 +208,7 @@
         </StackPanel>
 
         <!-- ===================== NOTICES ===================== -->
-        <StackPanel Grid.Row="2">
+        <StackPanel Grid.Row="3">
             <Border x:Name="UpdateBar" Visibility="Collapsed" Margin="0,0,0,10"
                     Background="{StaticResource PrimarySoft}" BorderBrush="{StaticResource Primary}"
                     BorderThickness="0,0,0,0" CornerRadius="7" Padding="14,10">
@@ -240,7 +241,7 @@
         </StackPanel>
 
         <!-- ===================== LOBBY ===================== -->
-        <ScrollViewer x:Name="LobbyPanel" Grid.Row="3" VerticalScrollBarVisibility="Auto">
+        <ScrollViewer x:Name="LobbyPanel" Grid.Row="4" VerticalScrollBarVisibility="Auto">
             <StackPanel>
                 <!-- Your side, then theirs. Two sections rather than one list,
                      because which side somebody is on is the first thing you
@@ -272,7 +273,7 @@
         </ScrollViewer>
 
         <!-- ===================== HISTORY ===================== -->
-        <ScrollViewer x:Name="HistoryView" Grid.Row="3" Visibility="Collapsed"
+        <ScrollViewer x:Name="HistoryView" Grid.Row="4" Visibility="Collapsed"
                       VerticalScrollBarVisibility="Auto">
             <ItemsControl x:Name="HistoryRows">
                 <ItemsControl.ItemTemplate>
@@ -335,7 +336,7 @@
         </ScrollViewer>
 
         <!-- ===================== ENCOUNTERS ===================== -->
-        <ScrollViewer x:Name="MetView" Grid.Row="3" Visibility="Collapsed"
+        <ScrollViewer x:Name="MetView" Grid.Row="4" Visibility="Collapsed"
                       VerticalScrollBarVisibility="Auto">
             <ItemsControl x:Name="MetRows">
                 <ItemsControl.ItemTemplate>
@@ -364,14 +365,20 @@
                             </Border.Style>
                             <Grid>
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="200"/>
+                                    <ColumnDefinition Width="260"/>
                                     <ColumnDefinition Width="110"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="110"/>
                                 </Grid.ColumnDefinitions>
 
-                                <TextBlock Grid.Column="0" Style="{StaticResource T.Body}"
-                                           Text="{Binding Who}" TextTrimming="CharacterEllipsis"/>
+                                <StackPanel Grid.Column="0" Orientation="Horizontal"
+                                            VerticalAlignment="Center">
+                                    <TextBlock Style="{StaticResource T.Body}" Text="{Binding Who}"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Style="{StaticResource T.Meta}" Text="{Binding Code}"
+                                               Margin="8,1,0,0" FontSize="11"
+                                               Visibility="{Binding CodeVisible}"/>
+                                </StackPanel>
 
                                 <Border Grid.Column="1" Style="{StaticResource Chip}"
                                         HorizontalAlignment="Left" Background="{Binding NoteTint}"
@@ -398,7 +405,7 @@
             </ItemsControl>
         </ScrollViewer>
 
-        <TextBlock x:Name="Diagnostics" Grid.Row="4" Margin="0,14,0,0"
+        <TextBlock x:Name="Diagnostics" Grid.Row="5" Margin="0,14,0,0"
                    FontFamily="Consolas" FontSize="11" Foreground="{StaticResource OnLow}"
                    TextWrapping="Wrap"/>
     </Grid>

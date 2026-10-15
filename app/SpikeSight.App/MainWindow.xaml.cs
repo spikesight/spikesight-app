@@ -19,8 +19,9 @@ public sealed record HistoryRow(
     string Rr, string RankAfter, Brush ResultBrush, Brush RrBrush, ImageSource? Portrait = null);
 
 public sealed record MetRow(
-    string Puuid, string Who, string Note, Brush NoteBrush, Brush NoteTint,
-    Visibility NoteVisible, string Met, string Split, string Last);
+    string Puuid, string Who, string Code, Visibility CodeVisible,
+    string Note, Brush NoteBrush, Brush NoteTint, Visibility NoteVisible,
+    string Met, string Split, string Last);
 
 public sealed record AlertRow(string Title, string Text, Brush Tint, Brush Edge);
 
@@ -58,7 +59,20 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        FitToScreen();
         Loaded += (_, _) => Start();
+    }
+
+    /// <summary>
+    /// Open big enough to show a full lobby without scrolling, but never
+    /// bigger than the screen it is on. Ten players, two team headings and
+    /// the status line need about 860px; a laptop may not have it.
+    /// </summary>
+    private void FitToScreen()
+    {
+        var work = SystemParameters.WorkArea;
+        Height = Math.Min(880, work.Height - 60);
+        Width = Math.Min(1060, work.Width - 60);
     }
 
     private void Note(string text)
@@ -573,16 +587,19 @@ public partial class MainWindow : Window
 
         MetRows.ItemsSource = people.Select(p => new MetRow(
             Puuid: p.Puuid,
-            // Names are only kept for players who were not hiding theirs, so
-            // everyone is shown by their local code - which still tells them
-            // apart, and is the whole point of the code.
-            Who: $"#{Privacy.HiddenTag(p.Puuid)}",
+            // Their riot ID when we were allowed to keep it, and the local
+            // code otherwise. A list of codes is unreadable; a list of names
+            // with codes only where there is no name is not.
+            Who: p.RiotId ?? $"#{Privacy.HiddenTag(p.Puuid)}",
+            Code: p.RiotId is null ? "" : $"#{Privacy.HiddenTag(p.Puuid)}",
+            CodeVisible: p.RiotId is null ? Visibility.Collapsed : Visibility.Visible,
             Note: p.WorstNote?.ToString().ToUpperInvariant() ?? "",
             NoteBrush: Swatch(NoteColour(p.WorstNote)),
             NoteTint: Swatch(NoteColour(p.WorstNote), 0x26),
             NoteVisible: p.WorstNote is null ? Visibility.Collapsed : Visibility.Visible,
             Met: p.Met == 1 ? "met once" : $"met {p.Met} times",
-            Split: $"{p.Ally} with you, {p.Enemy} against",
+            Split: (p.LastAgent is { Length: > 0 } agent ? $"last as {agent}  ·  " : "")
+                   + $"{p.Ally} with you, {p.Enemy} against",
             Last: Ago(p.LastSeen))).ToList();
 
         MatchLine.Text = $"{people.Count} players you have actually played with.";

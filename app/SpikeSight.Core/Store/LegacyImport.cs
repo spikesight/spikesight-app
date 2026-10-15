@@ -98,6 +98,27 @@ public static class LegacyImport
             }
         }
 
+        // 2.x kept last-known names in its own table; worth having, since
+        // the encounters list is far more use with names on it.
+        try
+        {
+            using var command = old.CreateCommand();
+            command.CommandText =
+                "SELECT puuid, last_name, last_tag FROM players WHERE last_name IS NOT NULL";
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                store.InsertImportedName(
+                    reader.GetString(0),
+                    reader.IsDBNull(1) ? null : reader.GetString(1),
+                    reader.IsDBNull(2) ? null : reader.GetString(2));
+            }
+        }
+        catch (SqliteException)
+        {
+            // No players table in that build: the codes still work.
+        }
+
         return new ImportResult(notes, encounters);
     }
 
