@@ -52,9 +52,10 @@ public partial class MainWindow : Window
         var foreground = Win32.ForegroundProcessId();
         var stolen = foreground == Environment.ProcessId;
 
+        // Built now so the handle exists and the styles are on, but not shown:
+        // it belongs over agent select and nowhere else.
         _overlay = new OverlayWindow();
         _overlay.PlaceTopRight();
-        _overlay.Show();
 
         var hwnd = _overlay.Handle;
         Note($"focus: {ProcessName(foreground)} {(stolen ? "<- TOOK IT" : "(not us)")}  "
@@ -75,7 +76,7 @@ public partial class MainWindow : Window
         {
             MatchLine.Text = snapshot.Message;
             Rows.ItemsSource = null;
-            _overlay?.Say(snapshot.Message);
+            _overlay?.HidePanel();
             if (snapshot.State != _lastState) Note($"state: {snapshot.State} - {snapshot.Message}");
             _lastState = snapshot.State;
             return;
@@ -106,8 +107,17 @@ public partial class MainWindow : Window
         }
         Rows.ItemsSource = rows;
 
-        var first = board.Sides.First(s => s.Players.Count > 0);
-        _overlay?.Say($"{first.Label}\n{rows.Count} players - {board.Label}");
+        // Agent select only. Once the match starts the panel has done its
+        // job, and leaving it up is just something drawn over the game.
+        if (snapshot.State == "PREGAME" && !snapshot.Stale)
+        {
+            var side = board.Sides.First(s => s.Players.Count > 0);
+            _overlay?.ShowLobby($"{side.Label} - {board.MapName}", rows);
+        }
+        else
+        {
+            _overlay?.HidePanel();
+        }
 
         if (snapshot.State == _lastState) return;
         _lastState = snapshot.State;

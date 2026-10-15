@@ -9,18 +9,35 @@ public partial class OverlayWindow : Window
     public OverlayWindow()
     {
         InitializeComponent();
-        // The styles have to go on once the handle exists, which for WPF is
-        // SourceInitialized - before the window is ever shown, so nothing is
-        // on screen in the wrong shape even for a frame. That is the whole
-        // grey-flash bug the browser version had, gone by construction.
+        // Styles go on once the handle exists, which for WPF is
+        // SourceInitialized - before the window is ever shown, so it is never
+        // on screen in the wrong shape even for a frame. That is the grey
+        // flash the browser version had, gone by construction.
         SourceInitialized += (_, _) => Win32.StyleAsOverlay(Handle);
     }
 
     public IntPtr Handle => new WindowInteropHelper(this).Handle;
 
-    public void Say(string text) => Status.Text = text;
+    /// <summary>
+    /// Show the lobby, or nothing at all.
+    ///
+    /// The panel belongs over agent select and nowhere else. It is not a
+    /// status bar: sitting in menus it has nothing to say, and during a round
+    /// it is something drawn over the game for no reason.
+    /// </summary>
+    public void ShowLobby(string heading, IReadOnlyList<Row> rows)
+    {
+        Heading.Text = heading.ToUpperInvariant();
+        Rows.ItemsSource = rows;
+        if (!IsVisible) Show();
+    }
 
-    /// <summary>Top-right of the working area, like the panel it replaces.</summary>
+    public void HidePanel()
+    {
+        if (IsVisible) Hide();
+    }
+
+    /// <summary>Top-right of the working area, clear of the agent grid.</summary>
     public void PlaceTopRight()
     {
         var work = SystemParameters.WorkArea;

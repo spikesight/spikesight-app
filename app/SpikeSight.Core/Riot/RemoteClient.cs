@@ -21,15 +21,20 @@ public sealed class RemoteClient : IDisposable
 {
     private readonly LocalClient _local;
     private readonly HttpClient _http;
+    private readonly RateLimiter _limiter;
     private Credentials? _credentials;
 
     public Endpoints Endpoints { get; }
+    public long TotalRequests => _limiter.TotalRequests;
 
-    public RemoteClient(LocalClient local, Endpoints endpoints, TimeSpan? timeout = null)
+    public RemoteClient(
+        LocalClient local, Endpoints endpoints,
+        TimeSpan? timeout = null, RateLimiter? limiter = null)
     {
         _local = local;
         Endpoints = endpoints;
         _http = new HttpClient { Timeout = timeout ?? TimeSpan.FromSeconds(12) };
+        _limiter = limiter ?? new RateLimiter();
     }
 
     private async Task<Credentials> CredentialsAsync(bool force, CancellationToken ct)
@@ -56,13 +61,17 @@ public sealed class RemoteClient : IDisposable
         bool allow404 = false, bool retried = false, CancellationToken ct = default)
     {
         HttpResponseMessage response;
-        try
+        // Every outbound request passes through the shared limiter.
+        using (await _limiter.SlotAsync(ct))
         {
-            response = await _http.SendAsync(await BuildAsync(method, url, body, ct), ct);
-        }
-        catch (HttpRequestException ex)
-        {
-            throw new RemoteException($"{method} {url} failed: {ex.Message}", inner: ex);
+            try
+            {
+                response = await _http.SendAsync(await BuildAsync(method, url, body, ct), ct);
+            }
+            catch (HttpRequestException ex)
+            {
+                throw new RemoteException($"{method} {url} failed: {ex.Message}", inner: ex);
+            }
         }
 
         if (response.StatusCode == HttpStatusCode.NotFound && allow404) return null;
@@ -173,5 +182,9 @@ public sealed class RemoteClient : IDisposable
         return resolved;
     }
 
-    public void Dispose() => _http.Dispose();
+    public void Dispose()
+    {
+        _http.Dispose();
+        _limiter.Dispose();
+    }
 }
