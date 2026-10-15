@@ -16,10 +16,11 @@ namespace SpikeSight.App;
 /// <summary>One board row, flattened for binding.</summary>
 public sealed record HistoryRow(
     string Map, string Queue, string Agent, string Score, string Kda, string Form,
-    string Rr, Brush ResultBrush, Brush RrBrush, ImageSource? Portrait = null);
+    string Rr, string RankAfter, Brush ResultBrush, Brush RrBrush, ImageSource? Portrait = null);
 
 public sealed record MetRow(
-    string Puuid, string Who, string Note, Brush NoteBrush, string Counts, string Last);
+    string Puuid, string Who, string Note, Brush NoteBrush, Brush NoteTint,
+    Visibility NoteVisible, string Met, string Split, string Last);
 
 public sealed record AlertRow(string Title, string Text, Brush Tint, Brush Edge);
 
@@ -31,7 +32,9 @@ public sealed record Row(
     ImageSource? Portrait = null, Brush? PartyBrush = null, string Sub = "",
     Visibility SubVisible = Visibility.Collapsed,
     Visibility SmurfVisible = Visibility.Collapsed,
-    Visibility PartyVisible = Visibility.Collapsed);
+    Visibility PartyVisible = Visibility.Collapsed,
+    Visibility NoteVisible = Visibility.Collapsed,
+    Brush? NoteTint = null, Brush? PartyTint = null);
 
 public partial class MainWindow : Window
 {
@@ -132,74 +135,20 @@ public partial class MainWindow : Window
             ? $"{board.MapName}  -  {board.Label}  (over)"
             : $"{board.MapName}  -  {board.Label}";
 
-        var rows = new List<Row>();
-        foreach (var side in board.Sides.Where(s => s.Players.Count > 0))
-        {
-            foreach (var player in side.Players)
-            {
-                var tier = player.Rank.Resolved;
-                var party = player.Party;
-                rows.Add(new Row(
-                    Agent: player.AgentName ?? "-",
-                    // A hidden player is shown by agent in the column beside
-                    // this one, so repeating it here says nothing. The local
-                    // code does: it is what tells two hidden players apart,
-                    // and what a note on one of them is filed under.
-                    Name: player.Name.Hidden
-                        ? $"#{player.Name.HiddenId ?? "hidden"}"
-                        : player.Name.Display,
-                    // Rank badge for everyone, RR for yourself only.
-                    //
-                    // The game shows you other players' rank and not their RR,
-                    // and that looks deliberate: Riot gives players flags to
-                    // hide their act rank badge and their leaderboard place,
-                    // so rank precision is clearly something they treat as the
-                    // player's to disclose. The endpoint hands it over, but
-                    // "the API returned it" is not the same as "the game shows
-                    // it", and the rank alone is what scouting actually needs.
-                    Rank: tier.IsRanked
-                        ? $"{tier.Name}{(player.IsSelf && player.Rank.Rr is > 0 ? $"  {player.Rank.Rr}" : "")}"
-                        : "Unranked",
-                    Peak: player.Peak is { } peak ? $"peak {Ranks.Of(peak.Tier).Name}" : "",
-                    Level: player.Level?.ToString() ?? (player.LevelHidden ? "hidden" : "-"),
-                    IsSelf: player.IsSelf,
-                    NameBrush: Swatch(player.Name.Hidden ? "#98A1B3" : "#E6E9EF"),
-                    RankBrush: Swatch(tier.Color),
-                    Form: Form(player),
-                    // Only scores worth acting on: a middling one was never a
-                    // reason to play differently.
-                    Smurf: player.Smurf is { Flagged: true } verdict
-                        ? $"SMURF {verdict.Score}" : "",
-                    Party: party is null
-                        ? ""
-                        : $"{party.Size}-STACK{(party.Confidence == "likely" ? "?" : "")}",
-                    Puuid: player.Puuid,
-                    Note: player.WorstNote is { } worst ? worst.ToString().ToUpperInvariant() : "",
-                    // Counted before this lobby is recorded, so "3rd time"
-                    // means three previous games, not counting this one.
-                    Met: player.Encounters is { Count: > 0 } met ? $"met {met.Count}x" : "",
-                    NoteBrush: Swatch(player.WorstNote switch
-                    {
-                        Severity.Dodge => "#FF4655",
-                        Severity.Avoid => "#E0A33A",
-                        Severity.Watch => "#2FB3A4",
-                        _ => "#6E7687",
-                    }),
-                    Portrait: Portraits.For(player.Puuid is { Length: > 0 } ? CharacterOf(player) : null),
-                    // Each premade gets its own colour down the edge of the
-                    // row, so a stack reads at a glance rather than by
-                    // comparing badges.
-                    PartyBrush: party is null
-                        ? Swatch("#00000000")
-                        : Swatch(PartyColours[(party.Group - 1) % PartyColours.Length]),
-                    Sub: Subtitle(player),
-                    SubVisible: Subtitle(player).Length > 0 ? Visibility.Visible : Visibility.Collapsed,
-                    SmurfVisible: player.Smurf is { Flagged: true }
-                        ? Visibility.Visible : Visibility.Collapsed,
-                    PartyVisible: party is null ? Visibility.Collapsed : Visibility.Visible));
-            }
-        }
-        Rows.ItemsSource = rows;
+        var ally = board.Sides.FirstOrDefault(sd => sd.Side == "ally");
+        var enemy = board.Sides.FirstOrDefault(sd => sd.Side == "enemy");
+
+        Rows.ItemsSource = (ally?.Players ?? []).Select(RowFor).ToList();
+        AllyLabel.Text = (ally?.Label ?? "Your team").ToUpperInvariant();
+        AllyMeta.Text = Side(ally);
+        AllyHead.Visibility = ally is { Players.Count: > 0 } ? Visibility.Visible : Visibility.Collapsed;
+
+        var haveEnemy = enemy is { Players.Count: > 0 };
+        EnemyRows.ItemsSource = haveEnemy ? enemy!.Players.Select(RowFor).ToList() : null;
+        EnemyLabel.Text = (enemy?.Label ?? "Enemy team").ToUpperInvariant();
+        EnemyMeta.Text = Side(enemy);
+        EnemyHead.Visibility = haveEnemy ? Visibility.Visible : Visibility.Collapsed;
+
         ShowOdds(board);
         ShowAlerts(board);
 
@@ -208,7 +157,8 @@ public partial class MainWindow : Window
         if (_settings.OverlayEnabled && snapshot.State == "PREGAME" && !snapshot.Stale)
         {
             var side = board.Sides.First(s => s.Players.Count > 0);
-            _overlay?.ShowLobby($"{side.Label} - {board.MapName}", rows);
+            _overlay?.ShowLobby($"{side.Label} - {board.MapName}",
+                                side.Players.Select(RowFor).ToList());
         }
         else
         {
@@ -225,7 +175,7 @@ public partial class MainWindow : Window
 
         var hidden = board.Players.Count(p => p.Flags.Incognito);
         Note($"state: {snapshot.State} - {board.MapName}, {board.Label}, "
-             + $"{rows.Count} players, {hidden} incognito never asked about");
+             + $"{board.Players.Count()} players, {hidden} incognito never asked about");
         // Names stay out of the log; this is enough to check a run afterwards.
         foreach (var player in board.Players)
         {
@@ -238,6 +188,71 @@ public partial class MainWindow : Window
                  + $"{(player.Stats is { Matches: > 0 } st ? $"  {st.Kd:F2}kd {st.Acs}acs {st.Performance}ps" : "")}");
         }
     }
+
+    /// <summary>A short summary for a team heading: how many, and how strong.</summary>
+    private static string Side(BoardSide? side)
+    {
+        if (side is not { Players.Count: > 0 }) return "";
+        var ranked = side.Players.Where(p => p.RatingPoints is not null).ToList();
+        var count = $"{side.Players.Count} player{(side.Players.Count == 1 ? "" : "s")}";
+        return ranked.Count == 0
+            ? count
+            : $"{count}  ·  avg {Ranks.PointsToLabel(ranked.Average(p => p.RatingPoints!.Value))}";
+    }
+
+    private Row RowFor(BoardPlayer player)
+    {
+        var tier = player.Rank.Resolved;
+        var party = player.Party;
+        var sub = Subtitle(player);
+        var partyColour = party is null
+            ? "#00000000"
+            : PartyColours[(party.Group - 1) % PartyColours.Length];
+
+        return new Row(
+            Agent: player.AgentName ?? "-",
+            // A hidden player is shown by agent beside this, so repeating it
+            // here says nothing. The local code does: it is what tells two
+            // hidden players apart and what a note is filed under.
+            Name: player.Name.Hidden ? $"#{player.Name.HiddenId ?? "hidden"}" : player.Name.Display,
+            // Rank badge for everyone, RR for yourself only - the game shows
+            // other players' rank and not their RR, and that reads as
+            // deliberate.
+            Rank: tier.IsRanked
+                ? $"{tier.Name}{(player.IsSelf && player.Rank.Rr is > 0 ? $"  {player.Rank.Rr}" : "")}"
+                : "Unranked",
+            Peak: "",
+            Level: player.Level?.ToString() ?? (player.LevelHidden ? "hidden" : "-"),
+            IsSelf: player.IsSelf,
+            NameBrush: Swatch(player.Name.Hidden ? "#A9B2C1" : "#EDF0F5"),
+            RankBrush: Swatch(tier.Color),
+            Form: Form(player),
+            Smurf: player.Smurf is { Flagged: true } verdict ? $"SMURF {verdict.Score}" : "",
+            Party: party is null
+                ? ""
+                : $"{party.Size}-STACK{(party.Confidence == "likely" ? "?" : "")}",
+            Puuid: player.Puuid,
+            Note: player.WorstNote?.ToString().ToUpperInvariant() ?? "",
+            Met: "",
+            NoteBrush: Swatch(NoteColour(player.WorstNote)),
+            Portrait: Portraits.For(player.CharacterId),
+            PartyBrush: Swatch(partyColour),
+            Sub: sub,
+            SubVisible: sub.Length > 0 ? Visibility.Visible : Visibility.Collapsed,
+            SmurfVisible: player.Smurf is { Flagged: true } ? Visibility.Visible : Visibility.Collapsed,
+            PartyVisible: party is null ? Visibility.Collapsed : Visibility.Visible,
+            NoteVisible: player.WorstNote is null ? Visibility.Collapsed : Visibility.Visible,
+            NoteTint: Swatch(NoteColour(player.WorstNote), 0x26),
+            PartyTint: Swatch(partyColour, 0x22));
+    }
+
+    private static string NoteColour(Severity? severity) => severity switch
+    {
+        Severity.Dodge => "#FF4655",
+        Severity.Avoid => "#E8B04B",
+        Severity.Watch => "#2FD4BE",
+        _ => "#788192",
+    };
 
     private void ShowOdds(Board board)
     {
@@ -516,10 +531,8 @@ public partial class MainWindow : Window
                     ? $"{m.RoundsWon}-{m.RoundsLost}" : "-",
                 Kda: m.Kills is null ? "-" : $"{m.Kills}/{m.Deaths}/{m.Assists}",
                 Form: Parts(m),
-                Rr: m.RrEarned is { } earned
-                    ? $"{(earned > 0 ? "+" : "")}{earned}"
-                      + (m.TierAfter is > 0 ? $"  {Ranks.Of(m.TierAfter).Short} {m.RrAfter}" : "")
-                    : "",
+                Rr: m.RrEarned is { } earned ? $"{(earned > 0 ? "+" : "")}{earned} RR" : "",
+                RankAfter: m.TierAfter is > 0 ? $"{Ranks.Of(m.TierAfter).Name} {m.RrAfter}" : "",
                 Portrait: Portraits.For(m.CharacterId),
                 ResultBrush: Swatch(m.Won switch
                 {
@@ -561,18 +574,15 @@ public partial class MainWindow : Window
         MetRows.ItemsSource = people.Select(p => new MetRow(
             Puuid: p.Puuid,
             // Names are only kept for players who were not hiding theirs, so
-            // a hidden player is their code and their history - which still
-            // tells them apart, and is the whole point of the code.
+            // everyone is shown by their local code - which still tells them
+            // apart, and is the whole point of the code.
             Who: $"#{Privacy.HiddenTag(p.Puuid)}",
             Note: p.WorstNote?.ToString().ToUpperInvariant() ?? "",
-            NoteBrush: Swatch(p.WorstNote switch
-            {
-                Severity.Dodge => "#FF4655",
-                Severity.Avoid => "#E0A33A",
-                Severity.Watch => "#2FB3A4",
-                _ => "#6E7687",
-            }),
-            Counts: $"met {p.Met}x  ({p.Ally} with, {p.Enemy} against)",
+            NoteBrush: Swatch(NoteColour(p.WorstNote)),
+            NoteTint: Swatch(NoteColour(p.WorstNote), 0x26),
+            NoteVisible: p.WorstNote is null ? Visibility.Collapsed : Visibility.Visible,
+            Met: p.Met == 1 ? "met once" : $"met {p.Met} times",
+            Split: $"{p.Ally} with you, {p.Enemy} against",
             Last: Ago(p.LastSeen))).ToList();
 
         MatchLine.Text = $"{people.Count} players you have actually played with.";
@@ -590,8 +600,16 @@ public partial class MainWindow : Window
         };
     }
 
-    private static Brush Swatch(string hex)
-        => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+    /// <summary>A brush from a hex colour, optionally at a lower alpha for
+    /// the soft fill behind a chip.</summary>
+    private static Brush Swatch(string hex, byte alpha = 0xFF)
+    {
+        var colour = (Color)ColorConverter.ConvertFromString(hex);
+        if (alpha != 0xFF) colour = Color.FromArgb(alpha, colour.R, colour.G, colour.B);
+        var brush = new SolidColorBrush(colour);
+        brush.Freeze();
+        return brush;
+    }
 
     private static string ProcessName(uint pid)
     {
