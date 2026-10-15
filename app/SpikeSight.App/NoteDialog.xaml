@@ -1,7 +1,8 @@
 <Window x:Class="SpikeSight.App.NoteDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Flag player" Width="460" SizeToContent="Height"
+        Title="Flag player"
+        Icon="Assets/spikesight.ico" Width="460" SizeToContent="Height"
         Background="{StaticResource Surface0}" WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize" ShowInTaskbar="False"
         TextOptions.TextFormattingMode="Ideal">

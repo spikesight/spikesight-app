@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.IO;
 using System.Windows.Forms;
 
 namespace SpikeSight.App;
@@ -7,8 +8,8 @@ namespace SpikeSight.App;
 /// The notification-area icon.
 ///
 /// <see cref="NotifyIcon"/> ships with the framework, so this costs a
-/// reference rather than a dependency - and it is about forty lines against
-/// the three hundred the Python build needed to hand-roll one.
+/// reference rather than a dependency - about forty lines against the three
+/// hundred the Python build spent hand-rolling one.
 /// </summary>
 public sealed class TrayIcon : IDisposable
 {
@@ -16,14 +17,22 @@ public sealed class TrayIcon : IDisposable
 
     public TrayIcon(Action show, Action quit)
     {
-        var menu = new ContextMenuStrip();
-        menu.Items.Add("Show SpikeSight", null, (_, _) => show());
+        var menu = new ContextMenuStrip
+        {
+            // The shell menu, dressed to match: the default is a white strip
+            // with a grey gutter, which looks like somebody else's app.
+            BackColor = Color.FromArgb(28, 34, 44),
+            ForeColor = Color.FromArgb(237, 240, 245),
+            Renderer = new ToolStripProfessionalRenderer(new TrayColours()),
+            ShowImageMargin = false,
+        };
+        menu.Items.Add(new ToolStripMenuItem("Show SpikeSight", null, (_, _) => show()));
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Quit", null, (_, _) => quit());
+        menu.Items.Add(new ToolStripMenuItem("Quit", null, (_, _) => quit()));
 
         _icon = new NotifyIcon
         {
-            Icon = Reticle(),
+            Icon = AppIcon(),
             Text = "SpikeSight",
             Visible = true,
             ContextMenuStrip = menu,
@@ -39,22 +48,31 @@ public sealed class TrayIcon : IDisposable
     }
 
     /// <summary>
-    /// The app's mark, drawn rather than shipped: a red ring with a dot, which
-    /// still reads at 16 pixels where anything more detailed turns to mush.
+    /// The shipped icon rather than one drawn at runtime.
+    ///
+    /// It is a real multi-resolution .ico, so Windows picks the 16px drawing
+    /// for the tray instead of squashing a large one - which is the
+    /// difference between a mark and a smudge at that size.
     /// </summary>
-    private static Icon Reticle()
+    private static Icon AppIcon()
     {
-        using var bitmap = new Bitmap(32, 32);
-        using (var art = Graphics.FromImage(bitmap))
+        try
         {
-            art.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            art.Clear(Color.Transparent);
-            using var ring = new Pen(Color.FromArgb(255, 70, 85), 3.5f);
-            art.DrawEllipse(ring, 6, 6, 20, 20);
-            using var dot = new SolidBrush(Color.FromArgb(230, 233, 239));
-            art.FillEllipse(dot, 14, 14, 4, 4);
+            var stream = System.Windows.Application.GetResourceStream(
+                new Uri("pack://application:,,,/Assets/spikesight.ico"))?.Stream;
+            if (stream is not null)
+            {
+                using (stream)
+                {
+                    return new Icon(stream, SystemInformation.SmallIconSize);
+                }
+            }
         }
-        return Icon.FromHandle(bitmap.GetHicon());
+        catch (Exception ex) when (ex is IOException or ArgumentException)
+        {
+            // Fall through: a tray icon is not worth failing to start over.
+        }
+        return SystemIcons.Application;
     }
 
     public void Dispose()
@@ -62,4 +80,24 @@ public sealed class TrayIcon : IDisposable
         _icon.Visible = false;
         _icon.Dispose();
     }
+}
+
+/// <summary>Dark colours for the shell's own menu renderer.</summary>
+internal sealed class TrayColours : ProfessionalColorTable
+{
+    private static readonly Color Surface = Color.FromArgb(28, 34, 44);
+    private static readonly Color Hover = Color.FromArgb(36, 44, 56);
+    private static readonly Color Edge = Color.FromArgb(38, 46, 58);
+
+    public override Color MenuItemSelected => Hover;
+    public override Color MenuItemSelectedGradientBegin => Hover;
+    public override Color MenuItemSelectedGradientEnd => Hover;
+    public override Color MenuItemBorder => Hover;
+    public override Color MenuBorder => Edge;
+    public override Color ToolStripDropDownBackground => Surface;
+    public override Color ImageMarginGradientBegin => Surface;
+    public override Color ImageMarginGradientMiddle => Surface;
+    public override Color ImageMarginGradientEnd => Surface;
+    public override Color SeparatorDark => Edge;
+    public override Color SeparatorLight => Edge;
 }

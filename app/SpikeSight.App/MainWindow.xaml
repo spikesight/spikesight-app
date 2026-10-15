@@ -1,7 +1,8 @@
 <Window x:Class="SpikeSight.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="SpikeSight" Height="720" Width="1040" MinWidth="880"
+        Title="SpikeSight"
+        Icon="Assets/spikesight.ico" Height="720" Width="1040" MinWidth="880"
         Background="{StaticResource Surface0}" ShowActivated="False"
         WindowStartupLocation="CenterScreen"
         TextOptions.TextFormattingMode="Ideal">

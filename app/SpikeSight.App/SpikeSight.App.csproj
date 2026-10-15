@@ -16,6 +16,9 @@
     <Version>3.0.0-preview</Version>
     <AssemblyTitle>SpikeSight</AssemblyTitle>
     <Product>SpikeSight</Product>
+    <!-- The .exe's own icon: what Explorer, the taskbar and alt-tab show,
+         before any window exists. -->
+    <ApplicationIcon>Assets/spikesight.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -29,6 +32,7 @@
     <!-- Agent portraits and the project's own typeface, so the window looks
          like the app rather than like a default WPF form. Barlow is OFL and
          converted from the woff2 the web build shipped. -->
+    <Resource Include="Assets/spikesight.ico" />
     <Resource Include="Assets/Agents/*.png" />
     <Resource Include="Assets/Fonts/*.ttf" />
   </ItemGroup>
