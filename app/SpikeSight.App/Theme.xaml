@@ -1,0 +1,113 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- The palette the web build used, so 3.0 looks like the same app. -->
+    <Color x:Key="BgColor">#FF0D0F14</Color>
+    <Color x:Key="RaisedColor">#FF151922</Color>
+    <Color x:Key="LineColor">#FF232A36</Color>
+
+    <SolidColorBrush x:Key="Bg"        Color="{StaticResource BgColor}"/>
+    <SolidColorBrush x:Key="Raised"    Color="{StaticResource RaisedColor}"/>
+    <SolidColorBrush x:Key="RaisedAlt" Color="#FF1A1F29"/>
+    <SolidColorBrush x:Key="Self"      Color="#FF1C2733"/>
+    <SolidColorBrush x:Key="Line"      Color="{StaticResource LineColor}"/>
+    <SolidColorBrush x:Key="Text"      Color="#FFE6E9EF"/>
+    <SolidColorBrush x:Key="Dim"       Color="#FF98A1B3"/>
+    <SolidColorBrush x:Key="Faint"     Color="#FF6E7687"/>
+    <SolidColorBrush x:Key="Accent"    Color="#FFFF4655"/>
+    <SolidColorBrush x:Key="Ally"      Color="#FF2FB3A4"/>
+    <SolidColorBrush x:Key="Warn"      Color="#FFE0A33A"/>
+
+    <FontFamily x:Key="Body">pack://application:,,,/Assets/Fonts/#Barlow</FontFamily>
+    <FontFamily x:Key="Condensed">pack://application:,,,/Assets/Fonts/#Barlow Condensed</FontFamily>
+
+    <Style TargetType="TextBlock" x:Key="BaseText">
+        <Setter Property="FontFamily" Value="{StaticResource Body}"/>
+        <Setter Property="Foreground" Value="{StaticResource Text}"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="TextOptions.TextFormattingMode" Value="Ideal"/>
+        <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
+    </Style>
+
+    <!-- Column headings: condensed, letterspaced, quiet. -->
+    <Style TargetType="TextBlock" x:Key="ColumnHead" BasedOn="{StaticResource BaseText}">
+        <Setter Property="FontFamily" Value="{StaticResource Condensed}"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{StaticResource Faint}"/>
+    </Style>
+
+    <Style TargetType="TextBlock" x:Key="Badge" BasedOn="{StaticResource BaseText}">
+        <Setter Property="FontFamily" Value="{StaticResource Condensed}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+    </Style>
+
+    <Style TargetType="RadioButton" x:Key="Tab">
+        <Setter Property="GroupName" Value="View"/>
+        <Setter Property="Foreground" Value="{StaticResource Dim}"/>
+        <Setter Property="FontFamily" Value="{StaticResource Condensed}"/>
+        <Setter Property="FontSize" Value="15"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Margin" Value="0,0,20,0"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <Border x:Name="Underline" Padding="2,0,2,6"
+                            BorderThickness="0,0,0,2" BorderBrush="Transparent">
+                        <ContentPresenter VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="Underline" Property="BorderBrush"
+                                    Value="{StaticResource Accent}"/>
+                            <Setter Property="Foreground" Value="{StaticResource Text}"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Foreground" Value="{StaticResource Text}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="Button" x:Key="Quiet">
+        <Setter Property="FontFamily" Value="{StaticResource Body}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Foreground" Value="{StaticResource Dim}"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Chrome" Background="#FF1A1F29" CornerRadius="4"
+                            BorderBrush="{StaticResource Line}" BorderThickness="1"
+                            Padding="10,4">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Chrome" Property="Background" Value="#FF222938"/>
+                            <Setter Property="Foreground" Value="{StaticResource Text}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="CheckBox" x:Key="Option">
+        <Setter Property="FontFamily" Value="{StaticResource Body}"/>
+        <Setter Property="FontSize" Value="13"/>
+        <Setter Property="Foreground" Value="{StaticResource Text}"/>
+        <Setter Property="Margin" Value="0,0,0,9"/>
+        <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+
+    <Style TargetType="ScrollBar">
+        <Setter Property="Width" Value="8"/>
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+
+</ResourceDictionary>

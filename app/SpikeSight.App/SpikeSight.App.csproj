@@ -25,4 +25,12 @@
     <Using Remove="System.Windows.Forms" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Agent portraits and the project's own typeface, so the window looks
+         like the app rather than like a default WPF form. Barlow is OFL and
+         converted from the woff2 the web build shipped. -->
+    <Resource Include="Assets/Agents/*.png" />
+    <Resource Include="Assets/Fonts/*.ttf" />
+  </ItemGroup>
+
 </Project>

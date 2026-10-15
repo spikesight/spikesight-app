@@ -10,6 +10,7 @@ public sealed record BoardPlayer(
     string Side,
     DisplayName Name,
     string? AgentName,
+    string CharacterId,
     PrivacyFlags Flags,
     RankView Rank,
     (int Tier, string ActId)? Peak,
@@ -160,6 +161,7 @@ public static class BoardBuilder
                 Side: ownTeam.Length > 0 && team == ownTeam ? "ally" : "enemy",
                 Name: Privacy.BuildDisplayName(flags, record, agent, puuid),
                 AgentName: agent,
+                CharacterId: Str(entry, "CharacterID"),
                 Flags: flags,
                 Rank: rank,
                 // Peak comes from the act rank badge, so a player who hid

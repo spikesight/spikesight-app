@@ -4,6 +4,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using SpikeSight.Core;
 using SpikeSight.Core.Game;
 using SpikeSight.Core.Riot;
@@ -15,16 +16,22 @@ namespace SpikeSight.App;
 /// <summary>One board row, flattened for binding.</summary>
 public sealed record HistoryRow(
     string Map, string Queue, string Agent, string Score, string Kda, string Form,
-    string Rr, Brush ResultBrush, Brush RrBrush);
+    string Rr, Brush ResultBrush, Brush RrBrush, ImageSource? Portrait = null);
 
 public sealed record MetRow(
     string Puuid, string Who, string Note, Brush NoteBrush, string Counts, string Last);
+
+public sealed record AlertRow(string Title, string Text, Brush Tint, Brush Edge);
 
 public sealed record Row(
     string Agent, string Name, string Rank, string Peak, string Level,
     bool IsSelf, Brush NameBrush, Brush RankBrush,
     string Form = "", string Smurf = "", string Party = "",
-    string Puuid = "", string Note = "", string Met = "", Brush? NoteBrush = null);
+    string Puuid = "", string Note = "", string Met = "", Brush? NoteBrush = null,
+    ImageSource? Portrait = null, Brush? PartyBrush = null, string Sub = "",
+    Visibility SubVisible = Visibility.Collapsed,
+    Visibility SmurfVisible = Visibility.Collapsed,
+    Visibility PartyVisible = Visibility.Collapsed);
 
 public partial class MainWindow : Window
 {
@@ -131,6 +138,7 @@ public partial class MainWindow : Window
             foreach (var player in side.Players)
             {
                 var tier = player.Rank.Resolved;
+                var party = player.Party;
                 rows.Add(new Row(
                     Agent: player.AgentName ?? "-",
                     // A hidden player is shown by agent in the column beside
@@ -162,8 +170,9 @@ public partial class MainWindow : Window
                     // reason to play differently.
                     Smurf: player.Smurf is { Flagged: true } verdict
                         ? $"SMURF {verdict.Score}" : "",
-                    Party: player.Party is { } party
-                        ? $"{party.Size}-STACK{(party.Confidence == "likely" ? "?" : "")}" : "",
+                    Party: party is null
+                        ? ""
+                        : $"{party.Size}-STACK{(party.Confidence == "likely" ? "?" : "")}",
                     Puuid: player.Puuid,
                     Note: player.WorstNote is { } worst ? worst.ToString().ToUpperInvariant() : "",
                     // Counted before this lobby is recorded, so "3rd time"
@@ -175,10 +184,24 @@ public partial class MainWindow : Window
                         Severity.Avoid => "#E0A33A",
                         Severity.Watch => "#2FB3A4",
                         _ => "#6E7687",
-                    })));
+                    }),
+                    Portrait: Portraits.For(player.Puuid is { Length: > 0 } ? CharacterOf(player) : null),
+                    // Each premade gets its own colour down the edge of the
+                    // row, so a stack reads at a glance rather than by
+                    // comparing badges.
+                    PartyBrush: party is null
+                        ? Swatch("#00000000")
+                        : Swatch(PartyColours[(party.Group - 1) % PartyColours.Length]),
+                    Sub: Subtitle(player),
+                    SubVisible: Subtitle(player).Length > 0 ? Visibility.Visible : Visibility.Collapsed,
+                    SmurfVisible: player.Smurf is { Flagged: true }
+                        ? Visibility.Visible : Visibility.Collapsed,
+                    PartyVisible: party is null ? Visibility.Collapsed : Visibility.Visible));
             }
         }
         Rows.ItemsSource = rows;
+        ShowOdds(board);
+        ShowAlerts(board);
 
         // Agent select only. Once the match starts the panel has done its
         // job, and leaving it up is just something drawn over the game.
@@ -215,6 +238,83 @@ public partial class MainWindow : Window
                  + $"{(player.Stats is { Matches: > 0 } st ? $"  {st.Kd:F2}kd {st.Acs}acs {st.Performance}ps" : "")}");
         }
     }
+
+    private void ShowOdds(Board board)
+    {
+        if (board.WinProbability is not { } odds || odds.KnownRanks == 0)
+        {
+            OddsRow.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        OddsRow.Visibility = Visibility.Visible;
+        OddsAlly.Text = $"{odds.Percent}%";
+        OddsEnemy.Text = $"{100 - odds.Percent}%";
+        MatchSub.Text = odds.Note;
+
+        // Sized on layout rather than guessed, so it is right at any width.
+        var bar = (FrameworkElement)OddsFill.Parent;
+        OddsFill.Width = Math.Max(0, bar.ActualWidth * odds.Percent / 100.0);
+        OddsFill.Height = 6;
+        bar.SizeChanged -= ResizeOdds;
+        bar.SizeChanged += ResizeOdds;
+    }
+
+    private void ResizeOdds(object sender, SizeChangedEventArgs e)
+    {
+        if (_board?.WinProbability is not { } odds) return;
+        OddsFill.Width = Math.Max(0, e.NewSize.Width * odds.Percent / 100.0);
+    }
+
+    /// <summary>
+    /// What is worth saying out loud about this lobby, above the board.
+    /// </summary>
+    private void ShowAlerts(Board board)
+    {
+        var alerts = new List<AlertRow>();
+
+        var flagged = board.Players.Where(p => !p.IsSelf && p.WorstNote is not null).ToList();
+        if (flagged.Count > 0)
+        {
+            var worst = flagged.Max(p => p.WorstNote!.Value);
+            alerts.Add(new AlertRow(
+                worst == Severity.Dodge ? "DODGE" : worst.ToString().ToUpperInvariant(),
+                $"{flagged.Count} player{(flagged.Count == 1 ? "" : "s")} you have flagged: "
+                + string.Join(", ", flagged.Take(4).Select(p => p.Name.Display)),
+                Swatch("#22FF4655"), Swatch("#FF4655")));
+        }
+
+        var smurfs = board.Players.Where(p => !p.IsSelf && p.Smurf is { Flagged: true }).ToList();
+        if (smurfs.Count > 0)
+        {
+            var enemy = smurfs.Count(p => p.Side == "enemy");
+            alerts.Add(new AlertRow(
+                "SMURF",
+                $"{smurfs.Count} possible smurf{(smurfs.Count == 1 ? "" : "s")}"
+                + (enemy > 0 ? $", {enemy} on the other side" : ""),
+                Swatch("#22E0A33A"), Swatch("#E0A33A")));
+        }
+
+        Alerts.ItemsSource = alerts;
+    }
+
+    /// <summary>Colours for premade groups, in the order they are found.</summary>
+    private static readonly string[] PartyColours =
+        ["#2FB3A4", "#E0A33A", "#8B7FD4", "#4FA3E3", "#D4786A"];
+
+    /// <summary>
+    /// The quiet line under a name: peak rank, and how often you have met.
+    /// </summary>
+    private static string Subtitle(BoardPlayer player)
+    {
+        var bits = new List<string>();
+        if (player.Peak is { } peak) bits.Add($"peak {Ranks.Of(peak.Tier).Name}");
+        if (player.Encounters is { Count: > 0 } met)
+            bits.Add($"met {met.Count}x ({met.Ally} with, {met.Enemy} against)");
+        return string.Join("  ·  ", bits);
+    }
+
+    private static string CharacterOf(BoardPlayer player) => player.CharacterId;
 
     private static string Form(BoardPlayer player)
     {
@@ -383,8 +483,9 @@ public partial class MainWindow : Window
     {
         if (sender is not RadioButton { Tag: string view } || !IsLoaded) return;
 
-        LobbyView.Visibility = view == "lobby" ? Visibility.Visible : Visibility.Collapsed;
-        LobbyHead.Visibility = LobbyView.Visibility;
+        LobbyPanel.Visibility = view == "lobby" ? Visibility.Visible : Visibility.Collapsed;
+        // The status line and odds belong to the lobby, not the other views.
+        StatusRow.Visibility = Visibility.Visible;
         HistoryView.Visibility = view == "history" ? Visibility.Visible : Visibility.Collapsed;
         MetView.Visibility = view == "met" ? Visibility.Visible : Visibility.Collapsed;
 
@@ -419,6 +520,7 @@ public partial class MainWindow : Window
                     ? $"{(earned > 0 ? "+" : "")}{earned}"
                       + (m.TierAfter is > 0 ? $"  {Ranks.Of(m.TierAfter).Short} {m.RrAfter}" : "")
                     : "",
+                Portrait: Portraits.For(m.CharacterId),
                 ResultBrush: Swatch(m.Won switch
                 {
                     true => "#2FB3A4",

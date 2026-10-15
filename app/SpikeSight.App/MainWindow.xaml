@@ -1,51 +1,113 @@
 <Window x:Class="SpikeSight.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="SpikeSight" Height="620" Width="940"
-        Background="#0D0F14" ShowActivated="False"
-        WindowStartupLocation="CenterScreen">
+        Title="SpikeSight" Height="680" Width="1000"
+        Background="{StaticResource Bg}" ShowActivated="False"
+        WindowStartupLocation="CenterScreen"
+        TextOptions.TextFormattingMode="Ideal">
 
     <!-- ShowActivated=False is the whole point: the window appears without
          taking foreground, so launching mid-match does not pull the mouse
          out of the game. -->
     <Window.Resources>
-        <Style TargetType="TextBlock">
-            <Setter Property="FontFamily" Value="Segoe UI"/>
-            <Setter Property="Foreground" Value="#E6E9EF"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-        </Style>
-        <Style x:Key="Tab" TargetType="RadioButton">
-            <Setter Property="GroupName" Value="View"/>
-            <Setter Property="Foreground" Value="#98A1B3"/>
-            <Setter Property="FontFamily" Value="Segoe UI"/>
-            <Setter Property="FontSize" Value="13"/>
-            <Setter Property="Margin" Value="0,0,18,0"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="RadioButton">
-                        <Border Padding="2,0,2,5" BorderThickness="0,0,0,2"
-                                BorderBrush="Transparent" x:Name="Underline">
-                            <ContentPresenter/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Underline" Property="BorderBrush" Value="#FF4655"/>
-                                <Setter Property="Foreground" Value="#E6E9EF"/>
+        <Style TargetType="TextBlock" BasedOn="{StaticResource BaseText}"/>
+
+        <!-- One lobby row. Portrait, who they are, rank, form, flags. -->
+        <DataTemplate x:Key="LobbyRow">
+            <Border Margin="0,0,0,4" Padding="10,8" CornerRadius="5" Tag="{Binding Puuid}">
+                <Border.ContextMenu>
+                    <!-- Flagging is the point of the app, so it is one
+                         right-click away from the lobby. -->
+                    <ContextMenu>
+                        <MenuItem Header="Watch" Tag="1" Click="FlagPlayer"/>
+                        <MenuItem Header="Avoid" Tag="2" Click="FlagPlayer"/>
+                        <MenuItem Header="Dodge" Tag="3" Click="FlagPlayer"/>
+                        <Separator/>
+                        <MenuItem Header="Add a note..." Tag="note" Click="FlagPlayer"/>
+                        <MenuItem Header="Clear flags"   Tag="0"    Click="FlagPlayer"/>
+                    </ContextMenu>
+                </Border.ContextMenu>
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Background" Value="{StaticResource Raised}"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsSelf}" Value="True">
+                                <Setter Property="Background" Value="{StaticResource Self}"/>
+                            </DataTrigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#FF1F2633"/>
                             </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-        <Style x:Key="Head" TargetType="TextBlock">
-            <Setter Property="FontSize" Value="10"/>
-            <Setter Property="Foreground" Value="#6E7687"/>
-            <Setter Property="FontFamily" Value="Segoe UI"/>
-        </Style>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="4"/>
+                        <ColumnDefinition Width="40"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="118"/>
+                        <ColumnDefinition Width="172"/>
+                        <ColumnDefinition Width="158"/>
+                        <ColumnDefinition Width="52"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Party colour runs down the edge, like the web build. -->
+                    <Border Grid.Column="0" Width="3" CornerRadius="2" Margin="0,1,9,1"
+                            Background="{Binding PartyBrush}"/>
+
+                    <Border Grid.Column="1" Width="30" Height="30" CornerRadius="15"
+                            Background="#FF11151D" Margin="0,0,10,0">
+                        <Image Source="{Binding Portrait}" Width="30" Height="30"
+                               RenderOptions.BitmapScalingMode="HighQuality"/>
+                    </Border>
+
+                    <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding Name}" FontSize="14"
+                                       Foreground="{Binding NameBrush}"
+                                       TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="{Binding Note}" Style="{StaticResource Badge}"
+                                       Foreground="{Binding NoteBrush}" Margin="9,2,0,0"/>
+                        </StackPanel>
+                        <TextBlock Text="{Binding Sub}" FontSize="11"
+                                   Foreground="{StaticResource Faint}"
+                                   Visibility="{Binding SubVisible}"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Width="3" Height="16" CornerRadius="2" Margin="0,0,8,0"
+                                Background="{Binding RankBrush}"/>
+                        <TextBlock Text="{Binding Rank}" FontSize="13"
+                                   Foreground="{Binding RankBrush}"/>
+                    </StackPanel>
+
+                    <TextBlock Grid.Column="4" Text="{Binding Form}" FontSize="12.5"
+                               Foreground="#FFC8CEDA"/>
+
+                    <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Background="#22FF4655" CornerRadius="3" Padding="6,2" Margin="0,0,6,0"
+                                Visibility="{Binding SmurfVisible}">
+                            <TextBlock Text="{Binding Smurf}" Style="{StaticResource Badge}"
+                                       Foreground="{StaticResource Accent}"/>
+                        </Border>
+                        <Border Background="#222FB3A4" CornerRadius="3" Padding="6,2"
+                                Visibility="{Binding PartyVisible}">
+                            <TextBlock Text="{Binding Party}" Style="{StaticResource Badge}"
+                                       Foreground="{StaticResource Ally}"/>
+                        </Border>
+                    </StackPanel>
+
+                    <TextBlock Grid.Column="6" Text="{Binding Level}" FontSize="12"
+                               Foreground="{StaticResource Faint}" HorizontalAlignment="Right"/>
+                </Grid>
+            </Border>
+        </DataTemplate>
     </Window.Resources>
 
-    <Grid Margin="18">
+    <Grid Margin="20,16,20,14">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -53,180 +115,183 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <StackPanel Orientation="Horizontal" Grid.Row="0">
-            <TextBlock Text="SPIKE" FontWeight="Bold" FontSize="21" Foreground="#FF4655"/>
-            <TextBlock Text="SIGHT" FontWeight="Bold" FontSize="21"/>
-            <TextBlock Text="v3 preview" FontSize="12" Foreground="#98A1B3" Margin="10,8,0,0"/>
+        <!-- ===================== HEADER ===================== -->
+        <Grid Grid.Row="0" Margin="0,0,0,14">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="SPIKE" FontFamily="{StaticResource Condensed}" FontWeight="Bold"
+                           FontSize="24" Foreground="{StaticResource Accent}"/>
+                <TextBlock Text="SIGHT" FontFamily="{StaticResource Condensed}" FontWeight="Bold"
+                           FontSize="24"/>
+                <TextBlock Text="3.0 preview" FontSize="11" Foreground="{StaticResource Faint}"
+                           Margin="9,10,0,0"/>
 
-            <StackPanel Orientation="Horizontal" Margin="28,8,0,0">
-                <RadioButton x:Name="TabLobby" Style="{StaticResource Tab}" Content="Lobby"
-                             IsChecked="True" Checked="SwitchView" Tag="lobby"/>
-                <RadioButton x:Name="TabHistory" Style="{StaticResource Tab}" Content="History"
-                             Checked="SwitchView" Tag="history"/>
-                <RadioButton x:Name="TabMet" Style="{StaticResource Tab}" Content="Encounters"
-                             Checked="SwitchView" Tag="met"/>
+                <StackPanel Orientation="Horizontal" Margin="30,7,0,0">
+                    <RadioButton x:Name="TabLobby" Style="{StaticResource Tab}" Content="LOBBY"
+                                 IsChecked="True" Checked="SwitchView" Tag="lobby"/>
+                    <RadioButton x:Name="TabHistory" Style="{StaticResource Tab}" Content="HISTORY"
+                                 Checked="SwitchView" Tag="history"/>
+                    <RadioButton x:Name="TabMet" Style="{StaticResource Tab}" Content="ENCOUNTERS"
+                                 Checked="SwitchView" Tag="met"/>
+                </StackPanel>
             </StackPanel>
 
-            <Button x:Name="SettingsButton" Content="settings" Margin="16,4,0,0" Padding="8,2"
-                    FontSize="11" Background="#1C2430" Foreground="#98A1B3"
-                    BorderBrush="#2A3240" Click="ToggleSettings"/>
-        </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <Ellipse x:Name="ConnDot" Width="8" Height="8" Fill="{StaticResource Faint}"
+                         Margin="0,0,8,0"/>
+                <Button x:Name="SettingsButton" Content="settings" Style="{StaticResource Quiet}"
+                        Click="ToggleSettings"/>
+            </StackPanel>
+        </Grid>
 
+        <!-- ===================== SETTINGS ===================== -->
         <Border x:Name="SettingsPane" Grid.Row="1" Visibility="Collapsed"
-                Background="#151922" CornerRadius="6" Padding="14,12" Margin="0,8,0,4">
+                Background="{StaticResource Raised}" CornerRadius="6" Padding="16,14"
+                Margin="0,0,0,12" BorderBrush="{StaticResource Line}" BorderThickness="1">
             <StackPanel>
-                <CheckBox x:Name="OptOverlay" Content="Pre-match overlay over agent select"
-                          Foreground="#E6E9EF" Margin="0,0,0,7" Click="SettingChanged"/>
-                <CheckBox x:Name="OptDeepStats" Content="Fetch recent-match stats (K/D, ACS, Performance Score)"
-                          Foreground="#E6E9EF" Margin="0,0,0,7" Click="SettingChanged"/>
-                <CheckBox x:Name="OptSmurf" Content="Smurf detection"
-                          Foreground="#E6E9EF" Margin="0,0,0,7" Click="SettingChanged"/>
-                <CheckBox x:Name="OptCloseToTray" Content="Close to the notification area instead of quitting"
-                          Foreground="#E6E9EF" Margin="0,0,0,7" Click="SettingChanged"/>
-                <CheckBox x:Name="OptAutostart" Content="Start with Windows"
-                          Foreground="#E6E9EF" Margin="0,0,0,7" Click="SettingChanged"/>
-                <CheckBox x:Name="OptDiagnostics" Content="Show the diagnostic panel (developer output)"
-                          Foreground="#E6E9EF" Click="SettingChanged"/>
-                <TextBlock x:Name="SettingsNote" FontSize="11" Foreground="#6E7687" Margin="0,9,0,0"
-                           TextWrapping="Wrap"/>
+                <CheckBox x:Name="OptOverlay" Style="{StaticResource Option}"
+                          Content="Pre-match overlay over agent select" Click="SettingChanged"/>
+                <CheckBox x:Name="OptDeepStats" Style="{StaticResource Option}"
+                          Content="Fetch recent-match stats (K/D, ACS, Performance Score)"
+                          Click="SettingChanged"/>
+                <CheckBox x:Name="OptSmurf" Style="{StaticResource Option}"
+                          Content="Smurf detection" Click="SettingChanged"/>
+                <CheckBox x:Name="OptCloseToTray" Style="{StaticResource Option}"
+                          Content="Close to the notification area instead of quitting"
+                          Click="SettingChanged"/>
+                <CheckBox x:Name="OptAutostart" Style="{StaticResource Option}"
+                          Content="Start with Windows" Click="SettingChanged"/>
+                <CheckBox x:Name="OptDiagnostics" Style="{StaticResource Option}" Margin="0"
+                          Content="Show the diagnostic panel (developer output)"
+                          Click="SettingChanged"/>
+                <TextBlock x:Name="SettingsNote" FontSize="11" Foreground="{StaticResource Faint}"
+                           Margin="0,10,0,0" TextWrapping="Wrap"/>
             </StackPanel>
         </Border>
 
-        <TextBlock x:Name="MatchLine" Grid.Row="1" Margin="0,8,0,10"
-                   FontSize="13" Foreground="#98A1B3"/>
-
-        <!-- News, not an alarm: it never blocks anything and never installs. -->
-        <Border x:Name="UpdateBar" Grid.Row="2" Visibility="Collapsed" Margin="0,0,0,8"
-                Background="#1C1A20" BorderBrush="#4A2630" BorderThickness="1"
-                CornerRadius="4" Padding="12,7">
+        <!-- ===================== STATUS ===================== -->
+        <StackPanel Grid.Row="1" x:Name="StatusRow" Margin="0,0,0,12">
             <StackPanel Orientation="Horizontal">
-                <TextBlock x:Name="UpdateText" FontSize="12" Foreground="#E6E9EF"/>
-                <TextBlock x:Name="UpdateLink" FontSize="12" Foreground="#FF4655"
+                <TextBlock x:Name="MatchLine" FontSize="14" Foreground="{StaticResource Text}"/>
+                <TextBlock x:Name="MatchSub" FontSize="12" Foreground="{StaticResource Faint}"
+                           Margin="12,2,0,0"/>
+            </StackPanel>
+
+            <!-- Win probability as a bar, because a bare number reads as a
+                 promise and this is a heuristic. -->
+            <Grid x:Name="OddsRow" Margin="0,10,0,0" Visibility="Collapsed">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" x:Name="OddsAlly" FontSize="12"
+                           Foreground="{StaticResource Ally}" Margin="0,0,10,0"/>
+                <Border Grid.Column="1" Height="6" CornerRadius="3" Background="#FF2A1D22">
+                    <Grid>
+                        <Border x:Name="OddsFill" HorizontalAlignment="Left" CornerRadius="3"
+                                Background="{StaticResource Ally}"/>
+                    </Grid>
+                </Border>
+                <TextBlock Grid.Column="2" x:Name="OddsEnemy" FontSize="12"
+                           Foreground="{StaticResource Accent}" Margin="10,0,0,0"/>
+            </Grid>
+        </StackPanel>
+
+        <!-- ===================== UPDATE ===================== -->
+        <Border x:Name="UpdateBar" Grid.Row="2" Visibility="Collapsed" Margin="0,0,0,10"
+                Background="#FF1C1A20" BorderBrush="#FF4A2630" BorderThickness="1"
+                CornerRadius="5" Padding="12,8">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock x:Name="UpdateText" FontSize="12.5"/>
+                <TextBlock x:Name="UpdateLink" FontSize="12.5" Foreground="{StaticResource Accent}"
                            Margin="12,0,0,0" Cursor="Hand" Text="Open the release page"
                            MouseLeftButtonUp="OpenRelease"/>
             </StackPanel>
         </Border>
 
+        <!-- ===================== ALERTS ===================== -->
+        <ItemsControl x:Name="Alerts" Grid.Row="3" Margin="0,0,0,10">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <Border Background="{Binding Tint}" BorderBrush="{Binding Edge}"
+                            BorderThickness="1" CornerRadius="5" Padding="12,8" Margin="0,0,0,5">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding Title}" Style="{StaticResource Badge}"
+                                       Foreground="{Binding Edge}" Margin="0,1,10,0"/>
+                            <TextBlock Text="{Binding Text}" FontSize="12.5"
+                                       Foreground="{StaticResource Text}"
+                                       TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
         <!-- ===================== LOBBY ===================== -->
-        <Grid x:Name="LobbyHead" Grid.Row="2" Margin="10,0,10,6">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="80"/>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="104"/>
-                <ColumnDefinition Width="150"/>
-                <ColumnDefinition Width="150"/>
-                <ColumnDefinition Width="54"/>
-            </Grid.ColumnDefinitions>
-            <TextBlock Grid.Column="0" Text="AGENT"  Style="{StaticResource Head}"/>
-            <TextBlock Grid.Column="1" Text="PLAYER" Style="{StaticResource Head}"/>
-            <TextBlock Grid.Column="2" Text="RANK"   Style="{StaticResource Head}"/>
-            <TextBlock Grid.Column="3" Text="RECENT FORM" Style="{StaticResource Head}"/>
-            <TextBlock Grid.Column="4" Text="FLAGS"  Style="{StaticResource Head}"/>
-            <TextBlock Grid.Column="5" Text="LEVEL"  Style="{StaticResource Head}"
-                       HorizontalAlignment="Right"/>
+        <Grid x:Name="LobbyPanel" Grid.Row="4">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0" Margin="24,0,10,7">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="40"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="118"/>
+                    <ColumnDefinition Width="172"/>
+                    <ColumnDefinition Width="158"/>
+                    <ColumnDefinition Width="52"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="1" Text="PLAYER" Style="{StaticResource ColumnHead}"/>
+                <TextBlock Grid.Column="2" Text="RANK" Style="{StaticResource ColumnHead}"/>
+                <TextBlock Grid.Column="3" Text="RECENT FORM" Style="{StaticResource ColumnHead}"/>
+                <TextBlock Grid.Column="4" Text="FLAGS" Style="{StaticResource ColumnHead}"/>
+                <TextBlock Grid.Column="5" Text="LEVEL" Style="{StaticResource ColumnHead}"
+                           HorizontalAlignment="Right"/>
+            </Grid>
+
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                <ItemsControl x:Name="Rows" ItemTemplate="{StaticResource LobbyRow}"/>
+            </ScrollViewer>
         </Grid>
 
-        <ScrollViewer x:Name="LobbyView" Grid.Row="3" VerticalScrollBarVisibility="Auto">
-            <ItemsControl x:Name="Rows">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <Border Margin="0,0,0,3" Padding="10,7"
-                                CornerRadius="4" Tag="{Binding Puuid}">
-                            <Border.ContextMenu>
-                                <!-- Flagging is the whole point of the app, so
-                                     it is one right-click from the lobby. -->
-                                <ContextMenu>
-                                    <MenuItem Header="Watch"  Tag="1" Click="FlagPlayer"/>
-                                    <MenuItem Header="Avoid"  Tag="2" Click="FlagPlayer"/>
-                                    <MenuItem Header="Dodge"  Tag="3" Click="FlagPlayer"/>
-                                    <Separator/>
-                                    <MenuItem Header="Add a note..." Tag="note" Click="FlagPlayer"/>
-                                    <MenuItem Header="Clear flags"   Tag="0"    Click="FlagPlayer"/>
-                                </ContextMenu>
-                            </Border.ContextMenu>
-                            <Border.Style>
-                                <Style TargetType="Border">
-                                    <Setter Property="Background" Value="#151922"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsSelf}" Value="True">
-                                            <Setter Property="Background" Value="#1C2430"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Border.Style>
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="80"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="104"/>
-                                    <ColumnDefinition Width="150"/>
-                                    <ColumnDefinition Width="150"/>
-                                    <ColumnDefinition Width="54"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{Binding Agent}" FontSize="12"
-                                           Foreground="#98A1B3"/>
-                                <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                    <TextBlock Text="{Binding Name}" FontSize="13"
-                                               Foreground="{Binding NameBrush}"
-                                               TextTrimming="CharacterEllipsis"/>
-                                    <TextBlock Text="{Binding Note}" FontSize="10" FontWeight="Bold"
-                                               Foreground="{Binding NoteBrush}" Margin="8,2,0,0"/>
-                                    <TextBlock Text="{Binding Met}" FontSize="10"
-                                               Foreground="#6E7687" Margin="8,2,0,0"/>
-                                </StackPanel>
-                                <TextBlock Grid.Column="2" Text="{Binding Rank}" FontSize="13"
-                                           Foreground="{Binding RankBrush}"/>
-                                <TextBlock Grid.Column="3" Text="{Binding Form}" FontSize="12"
-                                           Foreground="#C8CEDA"/>
-                                <StackPanel Grid.Column="4" Orientation="Horizontal">
-                                    <TextBlock Text="{Binding Party}" FontSize="11"
-                                               FontWeight="Bold" Foreground="#2FB3A4"
-                                               Margin="0,0,8,0"/>
-                                    <TextBlock Text="{Binding Smurf}" FontSize="11"
-                                               FontWeight="Bold" Foreground="#FF4655"/>
-                                </StackPanel>
-                                <TextBlock Grid.Column="5" Text="{Binding Level}" FontSize="12"
-                                           Foreground="#98A1B3" HorizontalAlignment="Right"/>
-                            </Grid>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </ScrollViewer>
-
         <!-- ===================== HISTORY ===================== -->
-        <ScrollViewer x:Name="HistoryView" Grid.Row="3" Visibility="Collapsed"
+        <ScrollViewer x:Name="HistoryView" Grid.Row="4" Visibility="Collapsed"
                       VerticalScrollBarVisibility="Auto">
             <ItemsControl x:Name="HistoryRows">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Border Margin="0,0,0,3" Padding="10,7" CornerRadius="4"
-                                Background="#151922">
+                        <Border Margin="0,0,0,4" Padding="12,9" CornerRadius="5"
+                                Background="{StaticResource Raised}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="4"/>
-                                    <ColumnDefinition Width="110"/>
-                                    <ColumnDefinition Width="110"/>
-                                    <ColumnDefinition Width="86"/>
-                                    <ColumnDefinition Width="70"/>
-                                    <ColumnDefinition Width="100"/>
+                                    <ColumnDefinition Width="40"/>
+                                    <ColumnDefinition Width="120"/>
+                                    <ColumnDefinition Width="108"/>
+                                    <ColumnDefinition Width="72"/>
+                                    <ColumnDefinition Width="104"/>
                                     <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="140"/>
+                                    <ColumnDefinition Width="150"/>
                                 </Grid.ColumnDefinitions>
-                                <Border Grid.Column="0" Background="{Binding ResultBrush}"
-                                        CornerRadius="2" Margin="0,0,10,0"/>
-                                <TextBlock Grid.Column="1" Text="{Binding Map}" FontSize="13"/>
-                                <TextBlock Grid.Column="2" Text="{Binding Queue}" FontSize="12"
-                                           Foreground="#98A1B3"/>
-                                <TextBlock Grid.Column="3" Text="{Binding Agent}" FontSize="12"
-                                           Foreground="#98A1B3"/>
-                                <TextBlock Grid.Column="4" Text="{Binding Score}" FontSize="13"
+                                <Border Grid.Column="0" Width="3" CornerRadius="2" Margin="0,1,9,1"
+                                        Background="{Binding ResultBrush}"/>
+                                <Border Grid.Column="1" Width="30" Height="30" CornerRadius="15"
+                                        Background="#FF11151D" Margin="0,0,10,0">
+                                    <Image Source="{Binding Portrait}" Width="30" Height="30"
+                                           RenderOptions.BitmapScalingMode="HighQuality"/>
+                                </Border>
+                                <TextBlock Grid.Column="2" Text="{Binding Map}" FontSize="14"/>
+                                <TextBlock Grid.Column="3" Text="{Binding Queue}" FontSize="12"
+                                           Foreground="{StaticResource Dim}"/>
+                                <TextBlock Grid.Column="4" Text="{Binding Score}" FontSize="14"
                                            Foreground="{Binding ResultBrush}"/>
-                                <TextBlock Grid.Column="5" Text="{Binding Kda}" FontSize="12"
-                                           Foreground="#C8CEDA"/>
-                                <TextBlock Grid.Column="6" Text="{Binding Form}" FontSize="12"
-                                           Foreground="#C8CEDA"/>
-                                <TextBlock Grid.Column="7" Text="{Binding Rr}" FontSize="12"
+                                <TextBlock Grid.Column="5" Text="{Binding Kda}" FontSize="12.5"
+                                           Foreground="#FFC8CEDA"/>
+                                <TextBlock Grid.Column="6" Text="{Binding Form}" FontSize="12.5"
+                                           Foreground="#FFC8CEDA"/>
+                                <TextBlock Grid.Column="7" Text="{Binding Rr}" FontSize="12.5"
                                            Foreground="{Binding RrBrush}" HorizontalAlignment="Right"/>
                             </Grid>
                         </Border>
@@ -236,18 +301,18 @@
         </ScrollViewer>
 
         <!-- ===================== ENCOUNTERS ===================== -->
-        <ScrollViewer x:Name="MetView" Grid.Row="3" Visibility="Collapsed"
+        <ScrollViewer x:Name="MetView" Grid.Row="4" Visibility="Collapsed"
                       VerticalScrollBarVisibility="Auto">
             <ItemsControl x:Name="MetRows">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Border Background="#151922" Margin="0,0,0,3" Padding="10,7"
-                                CornerRadius="4" Tag="{Binding Puuid}">
+                        <Border Background="{StaticResource Raised}" Margin="0,0,0,4" Padding="12,9"
+                                CornerRadius="5" Tag="{Binding Puuid}">
                             <Border.ContextMenu>
                                 <ContextMenu>
-                                    <MenuItem Header="Watch"  Tag="1" Click="FlagPlayer"/>
-                                    <MenuItem Header="Avoid"  Tag="2" Click="FlagPlayer"/>
-                                    <MenuItem Header="Dodge"  Tag="3" Click="FlagPlayer"/>
+                                    <MenuItem Header="Watch" Tag="1" Click="FlagPlayer"/>
+                                    <MenuItem Header="Avoid" Tag="2" Click="FlagPlayer"/>
+                                    <MenuItem Header="Dodge" Tag="3" Click="FlagPlayer"/>
                                     <Separator/>
                                     <MenuItem Header="Add a note..." Tag="note" Click="FlagPlayer"/>
                                     <MenuItem Header="Clear flags"   Tag="0"    Click="FlagPlayer"/>
@@ -256,18 +321,20 @@
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="120"/>
-                                    <ColumnDefinition Width="170"/>
+                                    <ColumnDefinition Width="130"/>
+                                    <ColumnDefinition Width="210"/>
                                     <ColumnDefinition Width="150"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Grid.Column="0" Text="{Binding Who}" FontSize="13"
+                                <TextBlock Grid.Column="0" Text="{Binding Who}" FontSize="14"
                                            TextTrimming="CharacterEllipsis"/>
-                                <TextBlock Grid.Column="1" Text="{Binding Note}" FontSize="11"
-                                           FontWeight="Bold" Foreground="{Binding NoteBrush}"/>
-                                <TextBlock Grid.Column="2" Text="{Binding Counts}" FontSize="12"
-                                           Foreground="#98A1B3"/>
+                                <TextBlock Grid.Column="1" Text="{Binding Note}"
+                                           Style="{StaticResource Badge}"
+                                           Foreground="{Binding NoteBrush}"/>
+                                <TextBlock Grid.Column="2" Text="{Binding Counts}" FontSize="12.5"
+                                           Foreground="{StaticResource Dim}"/>
                                 <TextBlock Grid.Column="3" Text="{Binding Last}" FontSize="12"
-                                           Foreground="#6E7687" HorizontalAlignment="Right"/>
+                                           Foreground="{StaticResource Faint}"
+                                           HorizontalAlignment="Right"/>
                             </Grid>
                         </Border>
                     </DataTemplate>
@@ -275,8 +342,8 @@
             </ItemsControl>
         </ScrollViewer>
 
-        <TextBlock x:Name="Diagnostics" Grid.Row="4" Margin="0,12,0,0"
-                   FontFamily="Consolas" FontSize="11" Foreground="#6E7687"
+        <TextBlock x:Name="Diagnostics" Grid.Row="5" Margin="0,12,0,0"
+                   FontFamily="Consolas" FontSize="11" Foreground="{StaticResource Faint}"
                    TextWrapping="Wrap"/>
     </Grid>
 </Window>
