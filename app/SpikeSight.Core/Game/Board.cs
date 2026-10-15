@@ -14,7 +14,8 @@ public sealed record BoardPlayer(
     (int Tier, string ActId)? Peak,
     int? Level,
     bool IsSelf,
-    SmurfVerdict? Smurf = null)
+    SmurfVerdict? Smurf = null,
+    PlayerStats? Stats = null)
 {
     public bool LevelHidden => Flags.HideAccountLevel;
     public double? RatingPoints => Rank.Points;
@@ -77,7 +78,8 @@ public static class BoardBuilder
         string? currentActId,
         GameContent? content = null,
         string state = "INGAME",
-        Settings? settings = null)
+        Settings? settings = null,
+        IReadOnlyDictionary<string, PlayerStats>? stats = null)
     {
         content ??= GameContent.Bundled;
         settings ??= Settings.Default;
@@ -125,6 +127,7 @@ public static class BoardBuilder
             var level = flags.HideAccountLevel || identity is not { } ident
                 ? null : IntOrNull(ident, "AccountLevel");
             var act = MmrView.ActRecord(seasons, currentActId);
+            var form = stats is not null && stats.TryGetValue(puuid, out var f) ? f : null;
             players.Add(new BoardPlayer(
                 Puuid: puuid,
                 Team: team,
@@ -142,7 +145,9 @@ public static class BoardBuilder
                 // scorer leaves it out rather than guessing at it.
                 Smurf: Smurf.Evaluate(
                     settings, level, flags.HideAccountLevel,
-                    rank.Tier, peak?.Tier, act.Games, act.Wins)));
+                    rank.Tier, peak?.Tier, act.Games, act.Wins,
+                    form?.Kd, form?.Matches ?? 0, form?.RecentWinrate),
+                Stats: form));
         }
 
         players.Sort((a, b) =>
@@ -179,8 +184,8 @@ public static class BoardBuilder
 
         var odds = twoTeams
             ? WinProbabilityEstimate.Estimate(settings,
-                ally.Select(p => new WinProbabilityEstimate.Entry(p.RatingPoints, null)).ToList(),
-                enemy.Select(p => new WinProbabilityEstimate.Entry(p.RatingPoints, null)).ToList())
+                ally.Select(p => new WinProbabilityEstimate.Entry(p.RatingPoints, p.Stats?.Kd)).ToList(),
+                enemy.Select(p => new WinProbabilityEstimate.Entry(p.RatingPoints, p.Stats?.Kd)).ToList())
             : null;
 
         return new Board(

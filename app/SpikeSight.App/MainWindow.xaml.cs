@@ -12,7 +12,8 @@ namespace SpikeSight.App;
 /// <summary>One board row, flattened for binding.</summary>
 public sealed record Row(
     string Agent, string Name, string Rank, string Peak, string Level,
-    bool IsSelf, Brush NameBrush, Brush RankBrush);
+    bool IsSelf, Brush NameBrush, Brush RankBrush,
+    string Form = "", string Smurf = "");
 
 public partial class MainWindow : Window
 {
@@ -108,7 +109,12 @@ public partial class MainWindow : Window
                     Level: player.Level?.ToString() ?? (player.LevelHidden ? "hidden" : "-"),
                     IsSelf: player.IsSelf,
                     NameBrush: Swatch(player.Name.Hidden ? "#98A1B3" : "#E6E9EF"),
-                    RankBrush: Swatch(tier.Color)));
+                    RankBrush: Swatch(tier.Color),
+                    Form: Form(player),
+                    // Only scores worth acting on: a middling one was never a
+                    // reason to play differently.
+                    Smurf: player.Smurf is { Flagged: true } verdict
+                        ? $"SMURF {verdict.Score}" : ""));
             }
         }
         Rows.ItemsSource = rows;
@@ -139,6 +145,15 @@ public partial class MainWindow : Window
                  + $"lvl={(player.Level?.ToString() ?? (player.LevelHidden ? "hidden" : "-")),-6} "
                  + $"{(player.Name.Hidden ? "INCOGNITO " + player.Name.HiddenId : "named")}");
         }
+    }
+
+    private static string Form(BoardPlayer player)
+    {
+        if (player.Stats is not { Matches: > 0 } stats) return "";
+        var parts = new List<string> { $"{stats.Kd:F2} K/D" };
+        if (stats.Acs is { } acs) parts.Add($"{acs} ACS");
+        if (stats.Performance is { } performance) parts.Add($"{performance} PS");
+        return string.Join("  ", parts);
     }
 
     private static Brush Swatch(string hex)

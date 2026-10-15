@@ -19,9 +19,20 @@ public sealed class MatchPoller : IDisposable
     private readonly Func<double> _now;
 
     private RemoteClient? _remote;
+    private StatsEngine? _stats;
     private Credentials? _credentials;
     private Acts _acts = Acts.Empty;
     private Snapshot _last = new("STARTING", null, "Connecting to the Riot Client...");
+
+    /// <summary>
+    /// Recent form for the lobby currently on screen.
+    ///
+    /// Agent select rebuilds the roster every few seconds as people lock in,
+    /// and each rebuild is a cheap one that fetches no stats. Without holding
+    /// them here, the K/D column would fill in once and then blank out for the
+    /// rest of the lobby - which is exactly what 2.x did until 2.2.2.
+    /// </summary>
+    private (string MatchId, IReadOnlyDictionary<string, PlayerStats> Stats)? _form;
 
     public MatchPoller(LocalClient local, Func<double>? now = null)
     {
@@ -30,6 +41,13 @@ public sealed class MatchPoller : IDisposable
     }
 
     public event Action<Snapshot>? Updated;
+
+    /// <summary>Something worth saying out loud, such as the scoring field
+    /// no longer meaning what ACS assumes.</summary>
+    public event Action<string>? Warned;
+
+    /// <summary>Fetch recent form as well as ranks. Off makes a scan much lighter.</summary>
+    public bool DeepStats { get; init; } = true;
 
     public TimeSpan Heartbeat { get; init; } = TimeSpan.FromSeconds(2);
     public TimeSpan IdleDelay { get; init; } = TimeSpan.FromSeconds(5);
@@ -85,6 +103,8 @@ public sealed class MatchPoller : IDisposable
         _credentials = await _local.GetCredentialsAsync(ct);
         var endpoints = await Endpoints.ResolveAsync(_local, ct: ct);
         _remote = new RemoteClient(_local, endpoints);
+        _stats = new StatsEngine(_remote);
+        _stats.Warning += message => Warned?.Invoke(message);
 
         // The act timeline is the one thing still worth asking the content
         // service for, and it changes a few times a year.
@@ -179,8 +199,31 @@ public sealed class MatchPoller : IDisposable
             return;
         }
 
-        var board = await BuildAsync(remote, payload, puuid, state, ct);
-        Publish(new Snapshot(state, board, ""));
+        var fresh = matchId != _form?.MatchId;
+        if (fresh) _form = null;
+
+        // Quick pass: ranks and names, on screen straight away.
+        Publish(new Snapshot(state, await BuildAsync(remote, payload, puuid, state, ct), ""));
+
+        if (!DeepStats || !fresh || _stats is null) return;
+
+        // Then recent form, which is the slow part, behind the board already
+        // being useful.
+        var roster = Roster(payload, state).ToList();
+        var queue = QueueOf(payload);
+        StatsResult result;
+        try
+        {
+            result = await _stats.CollectAsync(roster, queue, ct: ct);
+        }
+        catch (SpikeSightException)
+        {
+            return;   // the board without form beats no board
+        }
+
+        if (_plan.MatchId != matchId) return;   // moved on while we were reading
+        _form = (matchId, result.Players);
+        Publish(new Snapshot(state, await BuildAsync(remote, payload, puuid, state, ct), ""));
     }
 
     private async Task<Board> BuildAsync(
@@ -205,7 +248,9 @@ public sealed class MatchPoller : IDisposable
         // Incognito players are not in this list, so they are never asked about.
         var names = await remote.NamesAsync(resolvable, ct);
 
-        return BoardBuilder.Build(match, selfPuuid, mmr, names, _acts.Current?.Id, state: state);
+        return BoardBuilder.Build(
+            match, selfPuuid, mmr, names, _acts.Current?.Id, state: state,
+            stats: _form?.MatchId == _plan.MatchId ? _form?.Stats : null);
     }
 
     private static string Explain(RemoteException ex) => ex.Status switch
@@ -214,6 +259,38 @@ public sealed class MatchPoller : IDisposable
         _ when ex.Hint.Length > 0 => ex.Hint,
         _ => ex.Message,
     };
+
+    private static IEnumerable<string> Roster(JsonElement match, string state)
+    {
+        var entries = state == "PREGAME"
+            ? match.GetProperty("AllyTeam").GetProperty("Players").EnumerateArray()
+            : match.GetProperty("Players").EnumerateArray();
+
+        foreach (var entry in entries)
+        {
+            if (entry.TryGetProperty("Subject", out var s) && s.GetString() is { Length: > 0 } puuid)
+                yield return puuid;
+        }
+    }
+
+    /// <summary>
+    /// Which queue's history to read.
+    ///
+    /// Follows the lobby. Pulling competitive history while you are in a
+    /// Swiftplay game is the wrong evidence twice over: the K/D is from a
+    /// different mode, and a group who only play Swiftplay together would
+    /// show no shared parties at all.
+    /// </summary>
+    private static string QueueOf(JsonElement match)
+    {
+        if (match.TryGetProperty("MatchmakingData", out var mm)
+            && mm.ValueKind == JsonValueKind.Object
+            && mm.TryGetProperty("QueueID", out var q))
+        {
+            return q.GetString() ?? "";
+        }
+        return match.TryGetProperty("QueueID", out var direct) ? direct.GetString() ?? "" : "";
+    }
 
     private static string? MatchId(JsonElement? element)
         => element is { ValueKind: JsonValueKind.Object } value
