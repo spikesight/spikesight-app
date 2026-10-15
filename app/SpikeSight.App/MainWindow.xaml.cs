@@ -147,6 +147,16 @@ public partial class MainWindow : Window
         }
 
         Rows.ItemsSource = rows;
+
+        // Log the board without names, so a run can be checked afterwards
+        // without putting anyone's riot ID in a file.
+        foreach (var player in board.Players)
+        {
+            var tier = player.Rank.Resolved;
+            Note($"  {(player.IsSelf ? "you " : "    ")}{player.AgentName ?? "-",-10} "
+                 + $"{tier.Name,-12} lvl={(player.Level?.ToString() ?? (player.LevelHidden ? "hidden" : "-")),-6} "
+                 + $"{(player.Name.Hidden ? "INCOGNITO " + player.Name.HiddenId : "named")}");
+        }
         var first = board.Sides.First(s => s.Players.Count > 0);
         _overlay?.Say($"{first.Label}\n{rows.Count} players - {board.Label}");
     }
