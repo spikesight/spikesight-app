@@ -15,3 +15,5 @@ build/
 # .NET build output (the v3 rewrite)
 app/**/bin/
 app/**/obj/
+app/dist/
+app/publish-test/

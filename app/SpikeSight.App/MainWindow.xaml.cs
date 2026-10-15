@@ -8,7 +8,6 @@ using SpikeSight.Core.Game;
 using SpikeSight.Core.Riot;
 using SpikeSight.Core.Store;
 using SpikeSight.Core.Windows;
-using SpikeSight.Core.Windows;
 
 namespace SpikeSight.App;
 

@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using Microsoft.Win32;
 
 namespace SpikeSight.Core.Windows;
@@ -9,6 +10,7 @@ namespace SpikeSight.Core.Windows;
 /// no scheduled task - and removing it is deleting one registry value, which
 /// is what "uninstall is deleting the folder" depends on.
 /// </summary>
+[SupportedOSPlatform("windows")]
 public static class Autostart
 {
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
