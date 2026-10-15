@@ -22,10 +22,19 @@ public sealed class RemoteClient : IDisposable
     private readonly LocalClient _local;
     private readonly HttpClient _http;
     private readonly RateLimiter _limiter;
+    private readonly TtlCache _cache = new();
     private Credentials? _credentials;
+
+    // Lifetimes, matching 2.x. MMR barely moves inside a lobby, and a riot ID
+    // effectively never does.
+    private const double TtlMmr = 90.0;
+    private const double TtlNames = 6 * 3600.0;
+    private const double TtlContent = 12 * 3600.0;
+    private const double TtlHistory = 300.0;
 
     public Endpoints Endpoints { get; }
     public long TotalRequests => _limiter.TotalRequests;
+    public (long Hits, long Misses) CacheStats => (_cache.Hits, _cache.Misses);
 
     public RemoteClient(
         LocalClient local, Endpoints endpoints,
@@ -131,14 +140,17 @@ public sealed class RemoteClient : IDisposable
     // -- per-player ---------------------------------------------------------
 
     public Task<JsonElement?> MmrAsync(string puuid, CancellationToken ct = default)
-        => GetAsync($"{Endpoints.Pd}/mmr/v1/players/{puuid}", allow404: true, ct: ct);
+        => _cache.GetOrFetchAsync<JsonElement?>($"mmr:{puuid}", TtlMmr,
+            () => GetAsync($"{Endpoints.Pd}/mmr/v1/players/{puuid}", allow404: true, ct: ct), ct);
 
     public Task<JsonElement?> MatchHistoryAsync(
         string puuid, int count = 10, string queue = "", CancellationToken ct = default)
     {
         var url = $"{Endpoints.Pd}/match-history/v1/history/{puuid}?startIndex=0&endIndex={count}";
         if (queue.Length > 0) url += $"&queue={queue}";
-        return GetAsync(url, allow404: true, ct: ct);
+        return _cache.GetOrFetchAsync<JsonElement?>(
+            $"history:{puuid}:{count}:{queue}", TtlHistory,
+            () => GetAsync(url, allow404: true, ct: ct), ct);
     }
 
     public Task<JsonElement?> MatchDetailsAsync(string matchId, CancellationToken ct = default)
@@ -150,8 +162,9 @@ public sealed class RemoteClient : IDisposable
     /// reason to still ask.
     /// </summary>
     public Task<JsonElement?> ContentAsync(CancellationToken ct = default)
-        => GetAsync($"{Endpoints.Shared}/content-service/v3/content?locale=en-US",
-                    allow404: true, ct: ct);
+        => _cache.GetOrFetchAsync<JsonElement?>("content", TtlContent,
+            () => GetAsync($"{Endpoints.Shared}/content-service/v3/content?locale=en-US",
+                           allow404: true, ct: ct), ct);
 
     /// <summary>
     /// Batched riot ID lookup.
@@ -166,8 +179,21 @@ public sealed class RemoteClient : IDisposable
         var resolved = new Dictionary<string, (string, string)>();
         if (wanted.Count == 0) return resolved;
 
+        // A riot ID does not change inside a lobby, so only ask about the
+        // players we have never looked up.
+        var missing = new List<string>();
+        foreach (var puuid in wanted)
+        {
+            if (_cache.TryPeek<object>($"name:{puuid}", out var hit)
+                && hit is ValueTuple<string, string> name)
+                resolved[puuid] = name;
+            else
+                missing.Add(puuid);
+        }
+        if (missing.Count == 0) return resolved;
+
         var data = await SendAsync(
-            HttpMethod.Put, $"{Endpoints.Pd}/name-service/v2/players", wanted, ct: ct);
+            HttpMethod.Put, $"{Endpoints.Pd}/name-service/v2/players", missing, ct: ct);
         if (data is not { ValueKind: JsonValueKind.Array } array) return resolved;
 
         foreach (var entry in array.EnumerateArray())
@@ -175,9 +201,11 @@ public sealed class RemoteClient : IDisposable
             if (entry.ValueKind != JsonValueKind.Object) continue;
             var subject = entry.TryGetProperty("Subject", out var s) ? s.GetString() ?? "" : "";
             if (subject.Length == 0) continue;
-            resolved[subject] = (
+            var record = (
                 entry.TryGetProperty("GameName", out var g) ? g.GetString() ?? "" : "",
                 entry.TryGetProperty("TagLine", out var t) ? t.GetString() ?? "" : "");
+            resolved[subject] = record;
+            _cache.Put($"name:{subject}", record, TtlNames);
         }
         return resolved;
     }

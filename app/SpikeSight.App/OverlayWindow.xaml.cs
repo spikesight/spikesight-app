@@ -14,6 +14,11 @@ public partial class OverlayWindow : Window
         // on screen in the wrong shape even for a frame. That is the grey
         // flash the browser version had, gone by construction.
         SourceInitialized += (_, _) => Win32.StyleAsOverlay(Handle);
+
+        // Build the handle now rather than at first Show. Until it exists the
+        // window is unstyled, and anything asking whether it is click-through
+        // gets told "no" because there is nothing to ask about yet.
+        new WindowInteropHelper(this).EnsureHandle();
     }
 
     public IntPtr Handle => new WindowInteropHelper(this).Handle;

@@ -33,6 +33,12 @@ public sealed class MatchPoller : IDisposable
 
     public TimeSpan Heartbeat { get; init; } = TimeSpan.FromSeconds(2);
     public TimeSpan IdleDelay { get; init; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// How long to leave Riot alone after a 429. Long, deliberately: the
+    /// polite answer to being told to slow down is to actually stop.
+    /// </summary>
+    public TimeSpan RateLimitBackoff { get; init; } = TimeSpan.FromSeconds(60);
     public Snapshot Current => _last;
 
     public async Task RunAsync(CancellationToken ct)
@@ -49,6 +55,16 @@ public sealed class MatchPoller : IDisposable
             {
                 Publish(new Snapshot("DISCONNECTED", null, ex.Message));
                 delay = IdleDelay;
+            }
+            catch (RemoteException ex)
+            {
+                // Riot refusing a request is not a reason to throw away the
+                // lobby already on screen - the board is still the best thing
+                // we know. Say what happened and keep it.
+                delay = ex.Status == 429 ? RateLimitBackoff : IdleDelay;
+                Publish(_last.Board is null
+                    ? new Snapshot("DISCONNECTED", null, Explain(ex))
+                    : _last with { Message = Explain(ex) });
             }
             catch (SpikeSightException ex)
             {
@@ -191,6 +207,13 @@ public sealed class MatchPoller : IDisposable
 
         return BoardBuilder.Build(match, selfPuuid, mmr, names, _acts.Current?.Id, state: state);
     }
+
+    private static string Explain(RemoteException ex) => ex.Status switch
+    {
+        429 => "Riot asked us to slow down; waiting a minute.",
+        _ when ex.Hint.Length > 0 => ex.Hint,
+        _ => ex.Message,
+    };
 
     private static string? MatchId(JsonElement? element)
         => element is { ValueKind: JsonValueKind.Object } value
