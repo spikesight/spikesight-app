@@ -12,6 +12,13 @@ using SpikeSight.Core.Windows;
 namespace SpikeSight.App;
 
 /// <summary>One board row, flattened for binding.</summary>
+public sealed record HistoryRow(
+    string Map, string Queue, string Agent, string Score, string Kda, string Form,
+    string Rr, Brush ResultBrush, Brush RrBrush);
+
+public sealed record MetRow(
+    string Puuid, string Who, string Note, Brush NoteBrush, string Counts, string Last);
+
 public sealed record Row(
     string Agent, string Name, string Rank, string Peak, string Level,
     bool IsSelf, Brush NameBrush, Brush RankBrush,
@@ -309,6 +316,116 @@ public partial class MainWindow : Window
         }
 
         if (!_settings.OverlayEnabled) _overlay?.HidePanel();
+    }
+
+    /// <summary>Lobby, history or encounters. Each loads when first opened.</summary>
+    private async void SwitchView(object sender, RoutedEventArgs e)
+    {
+        if (sender is not RadioButton { Tag: string view } || !IsLoaded) return;
+
+        LobbyView.Visibility = view == "lobby" ? Visibility.Visible : Visibility.Collapsed;
+        LobbyHead.Visibility = LobbyView.Visibility;
+        HistoryView.Visibility = view == "history" ? Visibility.Visible : Visibility.Collapsed;
+        MetView.Visibility = view == "met" ? Visibility.Visible : Visibility.Collapsed;
+
+        if (view == "history") await LoadHistoryAsync();
+        if (view == "met") await LoadMetAsync();
+    }
+
+    private async Task LoadHistoryAsync()
+    {
+        MatchLine.Text = "Reading your recent matches...";
+        try
+        {
+            if (_poller?.Remote is not { } remote || _poller.Stats is not { } stats)
+            {
+                MatchLine.Text = "Not connected to the Riot Client yet.";
+                return;
+            }
+
+            var career = await CareerBuilder.BuildAsync(
+                remote, stats, GameContent.Bundled, _poller.SelfPuuid,
+                _poller.CurrentActId, ct: _stopping.Token);
+
+            HistoryRows.ItemsSource = career.Matches.Select(m => new HistoryRow(
+                Map: m.Map,
+                Queue: m.Queue.Length > 0 ? m.Queue : "-",
+                Agent: m.Agent ?? "-",
+                Score: m.RoundsWon is not null && m.RoundsLost is not null
+                    ? $"{m.RoundsWon}-{m.RoundsLost}" : "-",
+                Kda: m.Kills is null ? "-" : $"{m.Kills}/{m.Deaths}/{m.Assists}",
+                Form: Parts(m),
+                Rr: m.RrEarned is { } earned
+                    ? $"{(earned > 0 ? "+" : "")}{earned}"
+                      + (m.TierAfter is > 0 ? $"  {Ranks.Of(m.TierAfter).Short} {m.RrAfter}" : "")
+                    : "",
+                ResultBrush: Swatch(m.Won switch
+                {
+                    true => "#2FB3A4",
+                    false => "#FF4655",
+                    _ => "#3A4150",
+                }),
+                RrBrush: Swatch(m.RrEarned is null ? "#6E7687" : m.RrEarned >= 0 ? "#2FB3A4" : "#FF4655")))
+                .ToList();
+
+            var s = career.Summary;
+            MatchLine.Text = $"Last {s.Matches}:  {s.Wins}W {s.Losses}L"
+                             + (s.Winrate is { } rate ? $"  ({rate:P0})" : "")
+                             + (s.Kd is { } kd ? $"   {kd:F2} K/D" : "")
+                             + (s.Acs is { } acs ? $"   {acs} ACS" : "")
+                             + (s.Performance is { } ps ? $"   {ps} PS" : "")
+                             + (s.NetRr is { } rr ? $"   {(rr > 0 ? "+" : "")}{rr} RR" : "");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            MatchLine.Text = $"Could not read your history: {ex.Message}";
+        }
+    }
+
+    private static string Parts(CareerMatch match)
+    {
+        var bits = new List<string>();
+        if (match.Kd is { } kd) bits.Add($"{kd:F2} K/D");
+        if (match.Acs is { } acs) bits.Add($"{acs} ACS");
+        if (match.Performance is { } ps) bits.Add($"{ps} PS");
+        return string.Join("  ", bits);
+    }
+
+    private async Task LoadMetAsync()
+    {
+        MatchLine.Text = "Reading who you have played with...";
+        var people = await _notes.RecentPlayersAsync(ct: _stopping.Token);
+
+        MetRows.ItemsSource = people.Select(p => new MetRow(
+            Puuid: p.Puuid,
+            // Names are only kept for players who were not hiding theirs, so
+            // a hidden player is their code and their history - which still
+            // tells them apart, and is the whole point of the code.
+            Who: $"#{Privacy.HiddenTag(p.Puuid)}",
+            Note: p.WorstNote?.ToString().ToUpperInvariant() ?? "",
+            NoteBrush: Swatch(p.WorstNote switch
+            {
+                Severity.Dodge => "#FF4655",
+                Severity.Avoid => "#E0A33A",
+                Severity.Watch => "#2FB3A4",
+                _ => "#6E7687",
+            }),
+            Counts: $"met {p.Met}x  ({p.Ally} with, {p.Enemy} against)",
+            Last: Ago(p.LastSeen))).ToList();
+
+        MatchLine.Text = $"{people.Count} players you have actually played with.";
+    }
+
+    private static string Ago(DateTimeOffset when)
+    {
+        var span = DateTimeOffset.UtcNow - when;
+        return span switch
+        {
+            { TotalMinutes: < 60 } => $"{(int)span.TotalMinutes}m ago",
+            { TotalHours: < 24 } => $"{(int)span.TotalHours}h ago",
+            { TotalDays: < 30 } => $"{(int)span.TotalDays}d ago",
+            _ => when.ToLocalTime().ToString("d MMM yyyy"),
+        };
     }
 
     private static Brush Swatch(string hex)

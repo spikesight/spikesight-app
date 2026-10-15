@@ -11,6 +11,11 @@ public sealed record PlayerNote(
 
 public sealed record EncounterSummary(int Count, int Ally, int Enemy, DateTimeOffset? Last);
 
+/// <summary>A player you have met before, for the encounters list.</summary>
+public sealed record MetPlayer(
+    string Puuid, int Met, int Ally, int Enemy, DateTimeOffset LastSeen,
+    Severity? WorstNote, int Notes);
+
 /// <summary>
 /// Your own notes on players, and a record of who you have actually met.
 ///
@@ -327,6 +332,49 @@ public sealed class NotesStore : IDisposable
                     reader.IsDBNull(4) ? null : At(reader.GetInt64(4)));
             }
             return result;
+        }, ct);
+
+    /// <summary>
+    /// Everyone you have actually played with, most recently met first.
+    ///
+    /// Names are whatever was safe to store at the time, so a player who was
+    /// in Streamer Mode has none - their row is their puuid and their history,
+    /// which is the point: the flag followed them without recording who they
+    /// are.
+    /// </summary>
+    public Task<List<MetPlayer>> RecentPlayersAsync(int limit = 200, CancellationToken ct = default)
+        => LockedAsync(() =>
+        {
+            using var command = _db.CreateCommand();
+            command.CommandText = """
+                SELECT e.puuid,
+                       COUNT(*)                        AS met,
+                       SUM(e.relation = 'ally')        AS ally,
+                       SUM(e.relation = 'enemy')       AS enemy,
+                       MAX(e.seen)                     AS last_seen,
+                       (SELECT MAX(severity) FROM notes n WHERE n.puuid = e.puuid) AS worst,
+                       (SELECT COUNT(*)      FROM notes n WHERE n.puuid = e.puuid) AS notes
+                FROM encounters e
+                GROUP BY e.puuid
+                ORDER BY last_seen DESC
+                LIMIT $limit
+                """;
+            command.Parameters.AddWithValue("$limit", limit);
+
+            var people = new List<MetPlayer>();
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                people.Add(new MetPlayer(
+                    reader.GetString(0),
+                    reader.GetInt32(1),
+                    reader.GetInt32(2),
+                    reader.GetInt32(3),
+                    At(reader.GetInt64(4)),
+                    reader.IsDBNull(5) ? null : (Severity)reader.GetInt32(5),
+                    reader.GetInt32(6)));
+            }
+            return people;
         }, ct);
 
     public void Dispose()

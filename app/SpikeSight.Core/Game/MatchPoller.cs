@@ -82,6 +82,13 @@ public sealed class MatchPoller : IDisposable
     public TimeSpan RateLimitBackoff { get; init; } = TimeSpan.FromSeconds(60);
     public Snapshot Current => _last;
 
+    /// <summary>The connected client, once there is one. For the views that
+    /// read your own history rather than the lobby.</summary>
+    public RemoteClient? Remote => _remote;
+    public StatsEngine? Stats => _stats;
+    public string SelfPuuid => _credentials?.Puuid ?? "";
+    public string? CurrentActId => _acts.Current?.Id;
+
     public async Task RunAsync(CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
