@@ -51,6 +51,9 @@ public sealed class MatchPoller : IDisposable
     /// redrawn without asking Riot anything.</summary>
     private (JsonElement Match, string State, string MatchId)? _onScreen;
 
+    /// <summary>The form read currently running, so a new lobby cancels it.</summary>
+    private CancellationTokenSource? _enrich;
+
     public MatchPoller(LocalClient local, Func<double>? now = null)
     {
         _local = local;
@@ -80,6 +83,13 @@ public sealed class MatchPoller : IDisposable
     /// polite answer to being told to slow down is to actually stop.
     /// </summary>
     public TimeSpan RateLimitBackoff { get; init; } = TimeSpan.FromSeconds(60);
+
+    /// <summary>
+    /// How long to leave the game alone after a match starts before reading
+    /// recent form. Long enough for the map to finish loading, which is the
+    /// one moment the machine has nothing to spare.
+    /// </summary>
+    public TimeSpan EnrichDelayInGame { get; init; } = TimeSpan.FromSeconds(12);
     public Snapshot Current => _last;
 
     /// <summary>The connected client, once there is one. For the views that
@@ -280,24 +290,47 @@ public sealed class MatchPoller : IDisposable
 
         if (!DeepStats || !fresh || _stats is null) return;
 
-        // Then recent form, which is the slow part, behind the board already
-        // being useful.
-        var roster = Roster(payload, state).ToList();
-        var queue = QueueOf(payload);
-        StatsResult result;
+        // Recent form runs behind the board, off the polling loop, so the
+        // heartbeat keeps running while it reads.
+        _enrich?.Cancel();
+        _enrich = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var token = _enrich.Token;
+        _ = EnrichAsync(remote, payload, puuid, state, matchId, token);
+    }
+
+    /// <summary>
+    /// Fetch recent form for a lobby and republish the board with it.
+    ///
+    /// Deliberately late when a match has just started. Reading ten players'
+    /// history is the heaviest thing this app does, and the moment a match
+    /// loads is the heaviest moment the game has - a tester saw exactly one
+    /// stutter, at exactly that point. Agent select has the time to spare;
+    /// map load does not.
+    /// </summary>
+    private async Task EnrichAsync(
+        RemoteClient remote, JsonElement payload, string puuid, string state,
+        string matchId, CancellationToken ct)
+    {
         try
         {
-            result = await _stats.CollectAsync(roster, queue, ct: ct);
+            if (state == "INGAME") await Task.Delay(EnrichDelayInGame, ct);
+
+            var roster = Roster(payload, state).ToList();
+            var result = await _stats!.CollectAsync(roster, QueueOf(payload), ct: ct);
+
+            if (_plan.MatchId != matchId) return;   // moved on while we were reading
+            _form = (matchId, result.Players);
+            _lastStats = result;
+            Publish(new Snapshot(state, await BuildAsync(remote, payload, puuid, state, ct), ""));
+        }
+        catch (OperationCanceledException)
+        {
+            // Superseded by a newer lobby, or shutting down.
         }
         catch (SpikeSightException)
         {
-            return;   // the board without form beats no board
+            // The board without form beats no board.
         }
-
-        if (_plan.MatchId != matchId) return;   // moved on while we were reading
-        _form = (matchId, result.Players);
-        _lastStats = result;
-        Publish(new Snapshot(state, await BuildAsync(remote, payload, puuid, state, ct), ""));
     }
 
     private async Task<Board> BuildAsync(
@@ -454,5 +487,10 @@ public sealed class MatchPoller : IDisposable
     /// </summary>
     public void RefreshNotes() => _notesChanged = true;
 
-    public void Dispose() => _remote?.Dispose();
+    public void Dispose()
+    {
+        _enrich?.Cancel();
+        _enrich?.Dispose();
+        _remote?.Dispose();
+    }
 }
