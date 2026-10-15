@@ -44,6 +44,13 @@ public sealed class MatchPoller : IDisposable
     /// </summary>
     private (Board Board, string MatchId)? _pending;
 
+    /// <summary>Set when a flag was added or cleared and the board is stale.</summary>
+    private volatile bool _notesChanged;
+
+    /// <summary>The payload of the lobby on screen, kept so a flag can be
+    /// redrawn without asking Riot anything.</summary>
+    private (JsonElement Match, string State, string MatchId)? _onScreen;
+
     public MatchPoller(LocalClient local, Func<double>? now = null)
     {
         _local = local;
@@ -136,6 +143,17 @@ public sealed class MatchPoller : IDisposable
 
     private async Task TickAsync(CancellationToken ct)
     {
+        if (_notesChanged)
+        {
+            _notesChanged = false;
+            if (_onScreen is { } shown && _remote is { } client)
+            {
+                Publish(new Snapshot(shown.State,
+                    await BuildAsync(client, shown.Match, _credentials!.Puuid, shown.State, ct), ""));
+                return;
+            }
+        }
+
         var presence = await PresenceStateAsync(ct);
 
         switch (_plan.Decide(presence, _now()))
@@ -223,6 +241,8 @@ public sealed class MatchPoller : IDisposable
             _lastStats = null;
         }
 
+        _onScreen = (payload, state, matchId);
+
         // Quick pass: ranks and names, on screen straight away.
         Publish(new Snapshot(state, await BuildAsync(remote, payload, puuid, state, ct), ""));
 
@@ -287,13 +307,21 @@ public sealed class MatchPoller : IDisposable
         }
         catch (SpikeSightException) { /* inference still works without it */ }
 
+        // Notes and encounter counts are read before this lobby is recorded,
+        // so "3rd time" means three previous games, not counting this one.
+        var roster = Roster(match, state).ToList();
+        var notes = Notes is null ? null : await Notes.NotesForAsync(roster, ct);
+        var encounters = Notes is null ? null : await Notes.EncounterSummaryAsync(roster, ct);
+
         var usable = _form?.MatchId == _plan.MatchId;
         var board = BoardBuilder.Build(
             match, selfPuuid, mmr, names, _acts.Current?.Id, state: state,
             stats: usable ? _form?.Stats : null,
             partyIds: partyIds,
             coParty: usable ? _lastStats?.CoParty : null,
-            coParties: usable ? _lastStats?.CoParties : null);
+            coParties: usable ? _lastStats?.CoParties : null,
+            notes: notes,
+            encounters: encounters);
         return board;
     }
 
@@ -379,6 +407,14 @@ public sealed class MatchPoller : IDisposable
         }
         Updated?.Invoke(snapshot);
     }
+
+    /// <summary>
+    /// Re-read the board after a flag changes.
+    ///
+    /// Nothing about the lobby moved, so this must not cost a scan: the
+    /// roster, ranks and form are all still good and only the notes differ.
+    /// </summary>
+    public void RefreshNotes() => _notesChanged = true;
 
     public void Dispose() => _remote?.Dispose();
 }

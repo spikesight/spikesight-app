@@ -57,7 +57,18 @@
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
                         <Border Background="#151922" Margin="0,0,0,3" Padding="10,7"
-                                CornerRadius="4">
+                                CornerRadius="4" Tag="{Binding Puuid}">
+                            <Border.ContextMenu>
+                                <!-- Flagging is the whole point of the app, so
+                                     it is one right-click from the lobby. -->
+                                <ContextMenu>
+                                    <MenuItem Header="Watch"  Tag="1" Click="FlagPlayer"/>
+                                    <MenuItem Header="Avoid"  Tag="2" Click="FlagPlayer"/>
+                                    <MenuItem Header="Dodge"  Tag="3" Click="FlagPlayer"/>
+                                    <Separator/>
+                                    <MenuItem Header="Clear flags" Tag="0" Click="FlagPlayer"/>
+                                </ContextMenu>
+                            </Border.ContextMenu>
                             <Border.Style>
                                 <Style TargetType="Border">
                                     <Setter Property="Background" Value="#151922"/>
@@ -79,8 +90,15 @@
                                 </Grid.ColumnDefinitions>
                                 <TextBlock Grid.Column="0" Text="{Binding Agent}" FontSize="12"
                                            Foreground="#98A1B3"/>
-                                <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="13"
-                                           Foreground="{Binding NameBrush}" TextTrimming="CharacterEllipsis"/>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                    <TextBlock Text="{Binding Name}" FontSize="13"
+                                               Foreground="{Binding NameBrush}"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding Note}" FontSize="10" FontWeight="Bold"
+                                               Foreground="{Binding NoteBrush}" Margin="8,2,0,0"/>
+                                    <TextBlock Text="{Binding Met}" FontSize="10"
+                                               Foreground="#6E7687" Margin="8,2,0,0"/>
+                                </StackPanel>
                                 <TextBlock Grid.Column="2" Text="{Binding Rank}" FontSize="13"
                                            Foreground="{Binding RankBrush}"/>
                                 <TextBlock Grid.Column="3" Text="{Binding Form}" FontSize="12"

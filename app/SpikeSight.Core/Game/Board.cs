@@ -1,4 +1,5 @@
 using System.Text.Json;
+using SpikeSight.Core.Store;
 
 namespace SpikeSight.Core.Game;
 
@@ -16,9 +17,15 @@ public sealed record BoardPlayer(
     bool IsSelf,
     SmurfVerdict? Smurf = null,
     PlayerStats? Stats = null,
-    PartyAssignment? Party = null)
+    PartyAssignment? Party = null,
+    IReadOnlyList<PlayerNote>? Notes = null,
+    EncounterSummary? Encounters = null)
 {
     public bool LevelHidden => Flags.HideAccountLevel;
+
+    /// <summary>The worst flag left on this player, if any.</summary>
+    public Severity? WorstNote => Notes is { Count: > 0 } notes
+        ? notes.Max(n => n.Severity) : null;
     public double? RatingPoints => Rank.Points;
 }
 
@@ -83,7 +90,9 @@ public static class BoardBuilder
         IReadOnlyDictionary<string, PlayerStats>? stats = null,
         IReadOnlyDictionary<string, string>? partyIds = null,
         IReadOnlyDictionary<(string, string), int>? coParty = null,
-        IReadOnlyDictionary<string, int>? coParties = null)
+        IReadOnlyDictionary<string, int>? coParties = null,
+        IReadOnlyDictionary<string, List<PlayerNote>>? notes = null,
+        IReadOnlyDictionary<string, EncounterSummary>? encounters = null)
     {
         content ??= GameContent.Bundled;
         settings ??= Settings.Default;
@@ -165,7 +174,9 @@ public static class BoardBuilder
                     rank.Tier, peak?.Tier, act.Games, act.Wins,
                     form?.Kd, form?.Matches ?? 0, form?.RecentWinrate),
                 Stats: form,
-                Party: parties.GetValueOrDefault(puuid)));
+                Party: parties.GetValueOrDefault(puuid),
+                Notes: notes?.GetValueOrDefault(puuid),
+                Encounters: encounters?.GetValueOrDefault(puuid)));
         }
 
         players.Sort((a, b) =>

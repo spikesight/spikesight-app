@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using SpikeSight.Core.Game;
 using SpikeSight.Core.Riot;
@@ -14,7 +15,8 @@ namespace SpikeSight.App;
 public sealed record Row(
     string Agent, string Name, string Rank, string Peak, string Level,
     bool IsSelf, Brush NameBrush, Brush RankBrush,
-    string Form = "", string Smurf = "", string Party = "");
+    string Form = "", string Smurf = "", string Party = "",
+    string Puuid = "", string Note = "", string Met = "", Brush? NoteBrush = null);
 
 public partial class MainWindow : Window
 {
@@ -119,7 +121,19 @@ public partial class MainWindow : Window
                     Smurf: player.Smurf is { Flagged: true } verdict
                         ? $"SMURF {verdict.Score}" : "",
                     Party: player.Party is { } party
-                        ? $"{party.Size}-STACK{(party.Confidence == "likely" ? "?" : "")}" : ""));
+                        ? $"{party.Size}-STACK{(party.Confidence == "likely" ? "?" : "")}" : "",
+                    Puuid: player.Puuid,
+                    Note: player.WorstNote is { } worst ? worst.ToString().ToUpperInvariant() : "",
+                    // Counted before this lobby is recorded, so "3rd time"
+                    // means three previous games, not counting this one.
+                    Met: player.Encounters is { Count: > 0 } met ? $"met {met.Count}x" : "",
+                    NoteBrush: Swatch(player.WorstNote switch
+                    {
+                        Severity.Dodge => "#FF4655",
+                        Severity.Avoid => "#E0A33A",
+                        Severity.Watch => "#2FB3A4",
+                        _ => "#6E7687",
+                    })));
             }
         }
         Rows.ItemsSource = rows;
@@ -162,6 +176,37 @@ public partial class MainWindow : Window
         if (stats.Acs is { } acs) parts.Add($"{acs} ACS");
         if (stats.Performance is { } performance) parts.Add($"{performance} PS");
         return string.Join("  ", parts);
+    }
+
+    /// <summary>Flag or unflag the player whose row was right-clicked.</summary>
+    private async void FlagPlayer(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Tag: string tag } item) return;
+        if (item.Parent is not ContextMenu { PlacementTarget: FrameworkElement { Tag: string puuid } })
+            return;
+        if (puuid.Length == 0 || !int.TryParse(tag, out var severity)) return;
+
+        try
+        {
+            if (severity == 0)
+            {
+                var existing = await _notes.NotesForAsync([puuid], _stopping.Token);
+                foreach (var note in existing.GetValueOrDefault(puuid) ?? [])
+                    await _notes.DeleteNoteAsync(note.Id, _stopping.Token);
+                Note($"flags cleared for {puuid[..4]}...");
+            }
+            else
+            {
+                await _notes.AddNoteAsync(puuid, (Severity)severity, ct: _stopping.Token);
+                Note($"flagged {puuid[..4]}... as {(Severity)severity}");
+            }
+            // Nothing about the lobby changed, so re-read rather than rescan.
+            _poller?.RefreshNotes();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Note($"could not save that flag: {ex.Message}");
+        }
     }
 
     private static Brush Swatch(string hex)
