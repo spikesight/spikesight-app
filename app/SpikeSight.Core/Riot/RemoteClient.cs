@@ -153,6 +153,14 @@ public sealed class RemoteClient : IDisposable
             () => GetAsync(url, allow404: true, ct: ct), ct);
     }
 
+    /// <summary>RR won and lost per ranked match, newest first.</summary>
+    public Task<JsonElement?> CompetitiveUpdatesAsync(
+        string puuid, int count = 15, CancellationToken ct = default)
+        => _cache.GetOrFetchAsync<JsonElement?>($"compupd:{puuid}:{count}", TtlHistory,
+            () => GetAsync($"{Endpoints.Pd}/mmr/v1/players/{puuid}/competitiveupdates"
+                           + $"?startIndex=0&endIndex={count}&queue=competitive",
+                           allow404: true, ct: ct), ct);
+
     public Task<JsonElement?> MatchDetailsAsync(string matchId, CancellationToken ct = default)
         => GetAsync($"{Endpoints.Pd}/match-details/v1/matches/{matchId}", allow404: true, ct: ct);
 

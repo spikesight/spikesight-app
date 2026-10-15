@@ -12,6 +12,9 @@ public sealed record FormLine(
 
 public sealed record PlayerStats(string Puuid)
 {
+    /// <summary>Below this a match has no rounds worth dividing by.</summary>
+    public const int MinRoundsForAcs = 2;
+
     public int Matches { get; init; }
     public int Kills { get; init; }
     public int Deaths { get; init; }
@@ -160,6 +163,10 @@ public sealed class StatsEngine(RemoteClient remote, MatchCache? cache = null)
         return result;
     }
 
+    /// <summary>One match summary, cached or fetched. Used by the history view.</summary>
+    public Task<MatchSummary?> SummaryAsync(string matchId, CancellationToken ct = default)
+        => DetailsAsync(matchId, ct);
+
     private async Task<MatchSummary?> DetailsAsync(string matchId, CancellationToken ct)
     {
         if (_cache.Peek(matchId) is { } cached) return cached;
@@ -247,8 +254,15 @@ public sealed class StatsEngine(RemoteClient remote, MatchCache? cache = null)
             _kills += row.Kills;
             _deaths += row.Deaths;
             _assists += row.Assists;
-            _rounds += row.Rounds;
-            _score += row.Score;
+            // Deathmatch reports a single "round", so score-per-round there is
+            // the whole match score - 4000-odd, which would wreck an average
+            // taken across modes. ACS only means anything in a round-based
+            // mode, so only those contribute to it.
+            if (row.Rounds >= PlayerStats.MinRoundsForAcs)
+            {
+                _rounds += row.Rounds;
+                _score += row.Score;
+            }
             if (won is true) _wins++;
             else if (won is false) _losses++;
 
