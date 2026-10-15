@@ -86,6 +86,7 @@ public sealed class NotesStore : IDisposable
             )
             """);
         Execute("CREATE INDEX IF NOT EXISTS encounters_puuid ON encounters(puuid)");
+        Execute("CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)");
     }
 
     /// <summary>
@@ -122,6 +123,45 @@ public sealed class NotesStore : IDisposable
         command.CommandText =
             "SELECT (SELECT COUNT(*) FROM notes) + (SELECT COUNT(*) FROM encounters)";
         return Convert.ToInt64(command.ExecuteScalar()) == 0;
+    }
+
+    /// <summary>
+    /// Has the one-time import from 2.x already run?
+    ///
+    /// A marker rather than "are the tables empty": emptiness is a guess that
+    /// stops being true the moment anything is written, and running the import
+    /// twice would duplicate every note and inflate every "met 8 times".
+    /// </summary>
+    public bool HasImported()
+    {
+        using var command = _db.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM meta WHERE key = 'importedFromLegacy'";
+        return Convert.ToInt64(command.ExecuteScalar()) > 0;
+    }
+
+    /// <summary>
+    /// Run an import as one transaction.
+    ///
+    /// Either all of it lands or none does. Row-at-a-time auto-commit left a
+    /// partial import behind when the app was killed mid-way, and reported a
+    /// count that did not match what was actually written.
+    /// </summary>
+    public T InTransaction<T>(Func<T> work)
+    {
+        using var transaction = _db.BeginTransaction();
+        var result = work();
+
+        using (var mark = _db.CreateCommand())
+        {
+            mark.Transaction = transaction;
+            mark.CommandText =
+                "INSERT OR REPLACE INTO meta (key, value) VALUES ('importedFromLegacy', $when)";
+            mark.Parameters.AddWithValue("$when", DateTimeOffset.UtcNow.ToString("o"));
+            mark.ExecuteNonQuery();
+        }
+
+        transaction.Commit();
+        return result;
     }
 
     /// <summary>Insert a note keeping its original timestamp. Import only.</summary>

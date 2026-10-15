@@ -30,6 +30,7 @@ public partial class MainWindow : Window
     private OverlayWindow? _overlay;
     private MatchPoller? _poller;
     private string _lastState = "";
+    private bool _loggedForm;
 
     private static readonly string LogPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -105,6 +106,7 @@ public partial class MainWindow : Window
             _overlay?.HidePanel();
             if (snapshot.State != _lastState) Note($"state: {snapshot.State} - {snapshot.Message}");
             _lastState = snapshot.State;
+            _loggedForm = false;
             return;
         }
 
@@ -127,8 +129,17 @@ public partial class MainWindow : Window
                     Name: player.Name.Hidden
                         ? $"#{player.Name.HiddenId ?? "hidden"}"
                         : player.Name.Display,
+                    // Rank badge for everyone, RR for yourself only.
+                    //
+                    // The game shows you other players' rank and not their RR,
+                    // and that looks deliberate: Riot gives players flags to
+                    // hide their act rank badge and their leaderboard place,
+                    // so rank precision is clearly something they treat as the
+                    // player's to disclose. The endpoint hands it over, but
+                    // "the API returned it" is not the same as "the game shows
+                    // it", and the rank alone is what scouting actually needs.
                     Rank: tier.IsRanked
-                        ? $"{tier.Name}{(player.Rank.Rr is > 0 ? $"  {player.Rank.Rr}" : "")}"
+                        ? $"{tier.Name}{(player.IsSelf && player.Rank.Rr is > 0 ? $"  {player.Rank.Rr}" : "")}"
                         : "Unranked",
                     Peak: player.Peak is { } peak ? $"peak {Ranks.Of(peak.Tier).Name}" : "",
                     Level: player.Level?.ToString() ?? (player.LevelHidden ? "hidden" : "-"),
@@ -170,7 +181,12 @@ public partial class MainWindow : Window
             _overlay?.HidePanel();
         }
 
-        if (snapshot.State == _lastState) return;
+        // The enriched pass republishes with the same state, so logging only
+        // on a state change would miss recent form entirely - visible on
+        // screen, absent from the log that makes a run checkable afterwards.
+        var hasForm = board.Players.Any(p => p.Stats is { Matches: > 0 });
+        if (snapshot.State == _lastState && (!hasForm || _loggedForm)) return;
+        _loggedForm = hasForm;
         _lastState = snapshot.State;
 
         var hidden = board.Players.Count(p => p.Flags.Incognito);

@@ -26,11 +26,13 @@ public static class LegacyImport
     {
         legacyPath ??= Paths.LegacyNotesDb;
         if (!File.Exists(legacyPath)) return new ImportResult(0, 0);
-        if (!store.IsEmpty()) return new ImportResult(0, 0);
+        // The marker, not emptiness: emptiness stops being true the moment
+        // anything is written, and a second import would duplicate every note.
+        if (store.HasImported() || !store.IsEmpty()) return new ImportResult(0, 0);
 
         try
         {
-            return Import(store, legacyPath);
+            return store.InTransaction(() => Import(store, legacyPath));
         }
         catch (SqliteException ex)
         {
