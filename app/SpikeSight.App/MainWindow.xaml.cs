@@ -25,6 +25,9 @@ public sealed record MetRow(
 
 public sealed record AlertRow(string Title, string Text, Brush Tint, Brush Edge);
 
+/// <summary>One of your best agents on this map, for the overlay.</summary>
+public sealed record PoolRow(string Agent, string Record, ImageSource? Portrait);
+
 public sealed record Row(
     string Agent, string Name, string Rank, string Peak, string Level,
     bool IsSelf, Brush NameBrush, Brush RankBrush,
@@ -171,8 +174,9 @@ public partial class MainWindow : Window
         if (_settings.OverlayEnabled && snapshot.State == "PREGAME" && !snapshot.Stale)
         {
             var side = board.Sides.First(s => s.Players.Count > 0);
-            _overlay?.ShowLobby($"{side.Label} - {board.MapName}",
-                                side.Players.Select(RowFor).ToList());
+            _overlay?.ShowLobby(board.MapName, side.Players.Select(RowFor).ToList(),
+                                _pool, _pool is { Count: > 0 } ? "your best here" : null);
+            _ = LoadAgentPoolAsync(board.MapName);
         }
         else
         {
@@ -380,7 +384,16 @@ public partial class MainWindow : Window
             }
             else
             {
-                await _notes.AddNoteAsync(puuid, (Severity)severity, ct: _stopping.Token);
+                // Replace rather than append: one player, one flag. Otherwise
+                // the menu quietly builds a stack of them and only the worst
+                // ever shows.
+                var existing = (await _notes.NotesForAsync([puuid], _stopping.Token))
+                    .GetValueOrDefault(puuid) ?? [];
+                var keep = existing.FirstOrDefault();
+                foreach (var note in existing) await _notes.DeleteNoteAsync(note.Id, _stopping.Token);
+
+                await _notes.AddNoteAsync(puuid, (Severity)severity,
+                                          keep?.Text ?? "", keep?.Tags ?? [], _stopping.Token);
                 Note($"flagged {puuid[..4]}... as {(Severity)severity}");
             }
             // Nothing about the lobby changed, so re-read rather than rescan.
@@ -475,9 +488,16 @@ public partial class MainWindow : Window
             ? "From your encounter history."
             : $"{player.AgentName ?? "unknown agent"} - {player.Rank.Resolved.Name}";
 
-        var dialog = new NoteDialog(who, context) { Owner = this };
+        // Whatever is already on them, so the dialog edits the flag rather
+        // than stacking a second one underneath it - which is what made a
+        // severity picked from the menu vanish when the dialog opened.
+        var existing = (await _notes.NotesForAsync([puuid], _stopping.Token))
+            .GetValueOrDefault(puuid) ?? [];
+
+        var dialog = new NoteDialog(who, context, existing.FirstOrDefault()) { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
+        foreach (var note in existing) await _notes.DeleteNoteAsync(note.Id, _stopping.Token);
         await _notes.AddNoteAsync(puuid, dialog.Severity, dialog.Body, dialog.Tags,
                                   _stopping.Token);
         Note($"flagged {who} as {dialog.Severity}"
@@ -487,6 +507,37 @@ public partial class MainWindow : Window
     }
 
     private string? _releaseUrl;
+    private List<PoolRow>? _pool;
+    private string _poolMap = "";
+
+    /// <summary>
+    /// Your best agents on this map, for the overlay.
+    ///
+    /// Read from the match cache only, so it costs nothing: during agent
+    /// select there is a rate limit to respect and a lobby to scan first.
+    /// </summary>
+    private async Task LoadAgentPoolAsync(string mapName)
+    {
+        if (_poolMap == mapName || _poller is not { Stats: { } stats } poller) return;
+        _poolMap = mapName;
+
+        try
+        {
+            var history = await stats.CachedHistoryAsync(poller.SelfPuuid, ct: _stopping.Token);
+            var mapId = history.Select(h => h.MapId)
+                .FirstOrDefault(id => GameContent.Bundled.MapName(id) == mapName);
+
+            var best = AgentPool.Best(history, poller.SelfPuuid, mapId);
+            _pool = best.Select(a => new PoolRow(
+                GameContent.Bundled.AgentName(a.CharacterId) ?? "-",
+                $"{a.Wins}-{a.Losses}" + (a.Acs is { } acs ? $"  ·  {acs} ACS" : ""),
+                Portraits.For(a.CharacterId))).ToList();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _pool = null;   // a missing panel is better than a broken overlay
+        }
+    }
 
     private async Task CheckForUpdateAsync()
     {

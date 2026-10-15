@@ -11,12 +11,30 @@ public partial class NoteDialog : Window
 
     /// <param name="who">Whatever the board calls them - a riot ID, or the
     /// local code for somebody in Streamer Mode. Never resolved just for this.</param>
-    public NoteDialog(string who, string context)
+    /// <param name="existing">What is already on them, so this edits the flag
+    /// rather than quietly stacking a second one underneath it.</param>
+    public NoteDialog(string who, string context, PlayerNote? existing = null)
     {
         InitializeComponent();
         Who.Text = who;
         Context.Text = context;
-        Loaded += (_, _) => BodyBox.Focus();
+
+        if (existing is not null)
+        {
+            Title = "Edit flag";
+            SaveButton.Content = "Update flag";
+            SevWatch.IsChecked = existing.Severity == Severity.Watch;
+            SevAvoid.IsChecked = existing.Severity == Severity.Avoid;
+            SevDodge.IsChecked = existing.Severity == Severity.Dodge;
+            BodyBox.Text = existing.Text;
+            TagsBox.Text = string.Join(", ", existing.Tags);
+        }
+
+        Loaded += (_, _) =>
+        {
+            BodyBox.Focus();
+            BodyBox.CaretIndex = BodyBox.Text.Length;
+        };
     }
 
     private void Save(object sender, RoutedEventArgs e)

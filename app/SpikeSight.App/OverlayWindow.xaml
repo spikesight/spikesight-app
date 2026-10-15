@@ -2,40 +2,137 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="SpikeSight Overlay"
-        Width="300" SizeToContent="Height"
+        Width="400" SizeToContent="Height"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         ShowActivated="False" ShowInTaskbar="False" Topmost="True"
-        ResizeMode="NoResize" Focusable="False" IsHitTestVisible="False">
+        ResizeMode="NoResize" Focusable="False" IsHitTestVisible="False"
+        TextOptions.TextFormattingMode="Ideal">
 
     <!-- No chrome, no activation, no taskbar button, no hit testing. The
          equivalent in the Python build was a browser window plus ctypes to
          undo everything the browser did to it. -->
-    <Border CornerRadius="8" Padding="12,10" Margin="10"
-            Background="#E60D0F14" BorderBrush="#33FFFFFF" BorderThickness="1">
+    <Border CornerRadius="10" Margin="12" Padding="0"
+            Background="#F20E1116" BorderBrush="#33FFFFFF" BorderThickness="1">
         <Border.Effect>
-            <DropShadowEffect BlurRadius="18" ShadowDepth="0" Opacity="0.55" Color="Black"/>
+            <DropShadowEffect BlurRadius="24" ShadowDepth="0" Opacity="0.6" Color="Black"/>
         </Border.Effect>
+
         <StackPanel>
-            <TextBlock x:Name="Heading" Text="SPIKESIGHT" FontFamily="Segoe UI"
-                       FontWeight="Bold" FontSize="11" Foreground="#FF4655" Margin="0,0,0,7"/>
-            <ItemsControl x:Name="Rows">
+            <!-- Heading carries the accent, so the panel reads as the app at
+                 a glance over a busy agent-select screen. -->
+            <Border CornerRadius="10,10,0,0" Padding="14,10" Background="#1AFF4655">
+                <Grid>
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="SPIKE" FontFamily="{StaticResource Display}"
+                                   FontWeight="Bold" FontSize="14"
+                                   Foreground="{StaticResource Primary}"/>
+                        <TextBlock Text="SIGHT" FontFamily="{StaticResource Display}"
+                                   FontWeight="Bold" FontSize="14"
+                                   Foreground="{StaticResource OnHigh}"/>
+                    </StackPanel>
+                    <TextBlock x:Name="Heading" HorizontalAlignment="Right"
+                               Style="{StaticResource T.Label}"
+                               Foreground="{StaticResource OnMedium}"/>
+                </Grid>
+            </Border>
+
+            <ItemsControl x:Name="Rows" Margin="8,8,8,4">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Grid Margin="0,0,0,3">
+                        <Grid Margin="6,5">
                             <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="34"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Grid.Column="0" Text="{Binding Name}" FontFamily="Segoe UI"
-                                       FontSize="12" Foreground="{Binding NameBrush}"
-                                       TextTrimming="CharacterEllipsis"/>
-                            <TextBlock Grid.Column="1" Text="{Binding Rank}" FontFamily="Segoe UI"
-                                       FontSize="12" Foreground="{Binding RankBrush}"
-                                       Margin="8,0,0,0"/>
+
+                            <Grid Grid.Column="0" HorizontalAlignment="Left">
+                                <Ellipse Width="26" Height="26" Fill="#FF1C222C"/>
+                                <Ellipse Width="26" Height="26">
+                                    <Ellipse.Fill>
+                                        <ImageBrush ImageSource="{Binding Portrait}"
+                                                    Stretch="UniformToFill"/>
+                                    </Ellipse.Fill>
+                                </Ellipse>
+                                <Ellipse Width="28" Height="28" StrokeThickness="2"
+                                         Stroke="{Binding PartyBrush}"/>
+                            </Grid>
+
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="2,0,8,0">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding Name}" FontSize="13"
+                                               FontFamily="{StaticResource Body}"
+                                               Foreground="{Binding NameBrush}"
+                                               TextTrimming="CharacterEllipsis"/>
+                                    <Border CornerRadius="3" Padding="5,1" Margin="7,0,0,0"
+                                            Background="{Binding NoteTint}"
+                                            Visibility="{Binding NoteVisible}">
+                                        <TextBlock Text="{Binding Note}" FontSize="10"
+                                                   FontFamily="{StaticResource Display}"
+                                                   FontWeight="Bold"
+                                                   Foreground="{Binding NoteBrush}"/>
+                                    </Border>
+                                    <Border CornerRadius="3" Padding="5,1" Margin="5,0,0,0"
+                                            Background="#26FF4655"
+                                            Visibility="{Binding SmurfVisible}">
+                                        <TextBlock Text="SMURF" FontSize="10"
+                                                   FontFamily="{StaticResource Display}"
+                                                   FontWeight="Bold"
+                                                   Foreground="{StaticResource Primary}"/>
+                                    </Border>
+                                </StackPanel>
+                                <TextBlock Text="{Binding Form}" FontSize="11"
+                                           FontFamily="{StaticResource Body}"
+                                           Foreground="{StaticResource OnLow}"
+                                           Margin="0,1,0,0"/>
+                            </StackPanel>
+
+                            <TextBlock Grid.Column="2" Text="{Binding Rank}" FontSize="12.5"
+                                       FontFamily="{StaticResource Body}"
+                                       Foreground="{Binding RankBrush}"
+                                       VerticalAlignment="Center"/>
                         </Grid>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
+
+            <!-- Your best agents here, which is the one thing you can still
+                 act on while agent select is running. -->
+            <Border x:Name="PoolPanel" Visibility="Collapsed" Padding="14,8,14,10"
+                    BorderBrush="#1AFFFFFF" BorderThickness="0,1,0,0">
+                <StackPanel>
+                    <TextBlock x:Name="PoolHead" Style="{StaticResource T.Label}"
+                               Margin="0,0,0,6"/>
+                    <ItemsControl x:Name="PoolRows">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,2">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="26"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Ellipse Grid.Column="0" Width="20" Height="20"
+                                             HorizontalAlignment="Left">
+                                        <Ellipse.Fill>
+                                            <ImageBrush ImageSource="{Binding Portrait}"
+                                                        Stretch="UniformToFill"/>
+                                        </Ellipse.Fill>
+                                    </Ellipse>
+                                    <TextBlock Grid.Column="1" Text="{Binding Agent}" FontSize="12"
+                                               FontFamily="{StaticResource Body}"
+                                               Foreground="{StaticResource OnHigh}"
+                                               VerticalAlignment="Center" Margin="4,0,0,0"/>
+                                    <TextBlock Grid.Column="2" Text="{Binding Record}" FontSize="11"
+                                               FontFamily="{StaticResource Body}"
+                                               Foreground="{StaticResource OnMedium}"
+                                               VerticalAlignment="Center"/>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
         </StackPanel>
     </Border>
 </Window>

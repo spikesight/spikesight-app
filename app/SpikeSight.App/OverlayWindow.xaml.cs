@@ -30,10 +30,16 @@ public partial class OverlayWindow : Window
     /// status bar: sitting in menus it has nothing to say, and during a round
     /// it is something drawn over the game for no reason.
     /// </summary>
-    public void ShowLobby(string heading, IReadOnlyList<Row> rows)
+    public void ShowLobby(string heading, IReadOnlyList<Row> rows,
+                          IReadOnlyList<PoolRow>? pool = null, string? poolHeading = null)
     {
         Heading.Text = heading.ToUpperInvariant();
         Rows.ItemsSource = rows;
+
+        PoolRows.ItemsSource = pool;
+        PoolHead.Text = (poolHeading ?? "").ToUpperInvariant();
+        PoolPanel.Visibility = pool is { Count: > 0 } ? Visibility.Visible : Visibility.Collapsed;
+
         if (!IsVisible) Show();
     }
 

@@ -163,6 +163,24 @@ public sealed class StatsEngine(RemoteClient remote, MatchCache? cache = null)
         return result;
     }
 
+    /// <summary>
+    /// Your own recent matches from the disk cache, newest first.
+    ///
+    /// Cache only: the agent pool is a nicety shown during agent select, and
+    /// it is not worth a single request to fill.
+    /// </summary>
+    public async Task<List<MatchSummary>> CachedHistoryAsync(
+        string puuid, int count = 40, CancellationToken ct = default)
+    {
+        var summaries = new List<MatchSummary>();
+        foreach (var (matchId, _) in await ReadHistoryAsync(puuid, "", ct))
+        {
+            if (_cache.Peek(matchId) is { } summary) summaries.Add(summary);
+            if (summaries.Count >= count) break;
+        }
+        return summaries.OrderByDescending(s => s.StartedMs).ToList();
+    }
+
     /// <summary>One match summary, cached or fetched. Used by the history view.</summary>
     public Task<MatchSummary?> SummaryAsync(string matchId, CancellationToken ct = default)
         => DetailsAsync(matchId, ct);
