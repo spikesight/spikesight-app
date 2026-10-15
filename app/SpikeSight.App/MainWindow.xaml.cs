@@ -94,7 +94,13 @@ public partial class MainWindow : Window
                 var tier = player.Rank.Resolved;
                 rows.Add(new Row(
                     Agent: player.AgentName ?? "-",
-                    Name: player.Name.Display,
+                    // A hidden player is shown by agent in the column beside
+                    // this one, so repeating it here says nothing. The local
+                    // code does: it is what tells two hidden players apart,
+                    // and what a note on one of them is filed under.
+                    Name: player.Name.Hidden
+                        ? $"#{player.Name.HiddenId ?? "hidden"}"
+                        : player.Name.Display,
                     Rank: tier.IsRanked
                         ? $"{tier.Name}{(player.Rank.Rr is > 0 ? $"  {player.Rank.Rr}" : "")}"
                         : "Unranked",
