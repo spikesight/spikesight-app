@@ -1,7 +1,13 @@
 namespace SpikeSight.Core.Game;
 
 /// <summary>One competitive tier, as Riot numbers them on the wire.</summary>
-public sealed record Tier(int Number, string Name, string Short, string Color)
+/// <param name="Color">For a dark background.</param>
+/// <param name="LightColor">For a light one. Not derived from
+/// <paramref name="Color"/>: darkening the dark set by luminance collapses
+/// Gold and Bronze onto the same brown and Silver onto a neutral grey, which
+/// is a scoreboard where every rank reads the same. The tier is identified by
+/// its hue, so the hues are chosen rather than computed.</param>
+public sealed record Tier(int Number, string Name, string Short, string Color, string LightColor)
 {
     public bool IsRanked => Number >= Ranks.GroupBase;
     public bool IsImmortalPlus => Number >= 24;
@@ -22,18 +28,23 @@ public static class Ranks
     public const int MaxTier = RadiantTier;
 
     private const string UnrankedColor = "#4a4a52";
+    private const string UnrankedLight = "#52525B";
     private const string RadiantColor = "#f7e8a4";
+    private const string RadiantLight = "#B45309";
 
-    private static readonly (string Group, string Short, string Color)[] Groups =
+    // Light values hold the tier's hue and drop to roughly 5:1 against a
+    // white row. Silver and Iron stay neutral and keep their lightness order,
+    // since on a light background the pale one has to be the darker grey.
+    private static readonly (string Group, string Short, string Color, string Light)[] Groups =
     [
-        ("Iron", "I", "#5a5a5f"),
-        ("Bronze", "B", "#9b6b3e"),
-        ("Silver", "S", "#c3ccd0"),
-        ("Gold", "G", "#e0c04a"),
-        ("Platinum", "P", "#3fa3b8"),
-        ("Diamond", "D", "#b070d8"),
-        ("Ascendant", "A", "#25b06b"),
-        ("Immortal", "IM", "#c0374f"),
+        ("Iron", "I", "#5a5a5f", "#374151"),
+        ("Bronze", "B", "#9b6b3e", "#92400E"),
+        ("Silver", "S", "#c3ccd0", "#5B6A7D"),
+        ("Gold", "G", "#e0c04a", "#8A6D0B"),
+        ("Platinum", "P", "#3fa3b8", "#0E7490"),
+        ("Diamond", "D", "#b070d8", "#7E22CE"),
+        ("Ascendant", "A", "#25b06b", "#15803D"),
+        ("Immortal", "IM", "#c0374f", "#BE123C"),
     ];
 
     public static IReadOnlyDictionary<int, Tier> Table { get; } = Build();
@@ -42,18 +53,19 @@ public static class Ranks
     {
         var table = new Dictionary<int, Tier>
         {
-            [0] = new(0, "Unranked", "UNR", UnrankedColor),
-            [1] = new(1, "Unranked", "UNR", UnrankedColor),
-            [2] = new(2, "Unranked", "UNR", UnrankedColor),
-            [RadiantTier] = new(RadiantTier, "Radiant", "RAD", RadiantColor),
+            [0] = new(0, "Unranked", "UNR", UnrankedColor, UnrankedLight),
+            [1] = new(1, "Unranked", "UNR", UnrankedColor, UnrankedLight),
+            [2] = new(2, "Unranked", "UNR", UnrankedColor, UnrankedLight),
+            [RadiantTier] = new(RadiantTier, "Radiant", "RAD", RadiantColor, RadiantLight),
         };
 
         var number = GroupBase;
-        foreach (var (group, shortCode, color) in Groups)
+        foreach (var (group, shortCode, color, light) in Groups)
         {
             for (var division = 1; division <= 3; division++)
             {
-                table[number] = new Tier(number, $"{group} {division}", $"{shortCode}{division}", color);
+                table[number] = new Tier(number, $"{group} {division}",
+                                         $"{shortCode}{division}", color, light);
                 number++;
             }
         }

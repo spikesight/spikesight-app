@@ -334,7 +334,7 @@ public partial class MainWindow : Window
             Level: player.Level?.ToString() ?? (player.LevelHidden ? "hidden" : "-"),
             IsSelf: player.IsSelf,
             NameBrush: (Brush)FindResource(player.Name.Hidden ? "OnMedium" : "OnHigh"),
-            RankBrush: Swatch(tier.Color),
+            RankBrush: Swatch(Theme.IsLight ? tier.LightColor : tier.Color, derive: false),
             Form: Form(player),
             Smurf: player.Smurf is { Flagged: true } verdict ? $"SMURF {verdict.Score}" : "",
             Party: party is null
@@ -800,15 +800,19 @@ public partial class MainWindow : Window
     /// <summary>
     /// An accent colour, legible on whichever background is behind it.
     ///
-    /// The accents are picked for a dark window, and several of them - Silver,
-    /// Gold, Radiant - are pale enough to vanish on a light one. Darkening by
-    /// luminance keeps a single palette rather than a second one to maintain:
-    /// the hue is what identifies a rank, and the lightness is free.
+    /// These are picked for a dark window and several are pale enough to
+    /// vanish on a light one. Scaling by luminance is enough when the colour
+    /// only has to stand out - a party ring, a severity chip, a win or a
+    /// loss. It is not enough when the colour has to be told apart from
+    /// another one, which is why rank tiers pass derive: false and bring
+    /// their own light value.
     /// </summary>
-    private static Brush Swatch(string hex, byte alpha = 0xFF)
+    /// <param name="derive">False for a colour that already has a light
+    /// value of its own, such as a rank tier.</param>
+    private static Brush Swatch(string hex, byte alpha = 0xFF, bool derive = true)
     {
         var colour = (Color)ColorConverter.ConvertFromString(hex);
-        if (Theme.IsLight) colour = Darkened(colour);
+        if (Theme.IsLight && derive) colour = Darkened(colour);
         if (alpha != 0xFF) colour = Color.FromArgb(alpha, colour.R, colour.G, colour.B);
         var brush = new SolidColorBrush(colour);
         brush.Freeze();
@@ -822,12 +826,12 @@ public partial class MainWindow : Window
         // better than averaging the channels does.
         static double Luminance(Color c) => (0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B) / 255.0;
 
-        // Low enough for a 3px rank pip, not just for text. A mid-tone reads
-        // fine as a word on white and nearly vanishes as a thin bar of the
-        // same colour, because what is short there is area rather than
-        // contrast ratio - and the pip is the part meant to be recognised at
-        // a glance.
-        const double Ceiling = 0.30;
+        // Enough to be legible without flattening the hue. Pushed further
+        // than this, everything warm collapses onto the same brown - which is
+        // why the rank tiers have a chosen light palette instead of a derived
+        // one. These are party rings, severity and win-loss, where the colour
+        // only has to stand out rather than name anything.
+        const double Ceiling = 0.42;
         var luminance = Luminance(colour);
         if (luminance <= Ceiling) return colour;
 
