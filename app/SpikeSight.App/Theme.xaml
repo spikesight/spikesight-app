@@ -107,6 +107,15 @@
         <Setter Property="Typography.NumeralAlignment" Value="Tabular"/>
     </Style>
 
+    <!-- The unit beside a number: present, and out of the way. -->
+    <Style x:Key="T.Unit" TargetType="TextBlock" BasedOn="{StaticResource T.Base}">
+        <Setter Property="FontSize" Value="10"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{DynamicResource OnLow}"/>
+        <Setter Property="Margin" Value="4,0,0,1"/>
+        <Setter Property="VerticalAlignment" Value="Bottom"/>
+    </Style>
+
     <!-- ===== components ===== -->
 
     <Style x:Key="Card" TargetType="Border">

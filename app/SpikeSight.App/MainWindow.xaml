@@ -98,8 +98,36 @@
                                    Foreground="{Binding RankBrush}"/>
                     </Border>
 
-                    <TextBlock Grid.Column="3" Style="{StaticResource T.Numeric}"
-                               Text="{Binding Form}"/>
+                    <!-- Three measurements, not one sentence. Run together as
+                         "1.19 K/D 218 ACS 250 PS" the digits and their units
+                         blur into each other; splitting the unit out, quieter
+                         and smaller, lets the eye land on the number. Equal
+                         columns so they line up down the board. -->
+                    <Grid Grid.Column="3" VerticalAlignment="Center">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource T.Numeric}" Text="{Binding Kd}"
+                                       Foreground="{DynamicResource OnHigh}"/>
+                            <TextBlock Style="{StaticResource T.Unit}" Text="K/D"
+                                       Visibility="{Binding FormVisible}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource T.Numeric}" Text="{Binding Acs}"
+                                       Foreground="{DynamicResource OnHigh}"/>
+                            <TextBlock Style="{StaticResource T.Unit}" Text="ACS"
+                                       Visibility="{Binding AcsVisible}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal">
+                            <TextBlock Style="{StaticResource T.Numeric}" Text="{Binding Ps}"
+                                       Foreground="{DynamicResource OnHigh}"/>
+                            <TextBlock Style="{StaticResource T.Unit}" Text="PS"
+                                       Visibility="{Binding PsVisible}"/>
+                        </StackPanel>
+                    </Grid>
 
                     <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
                         <Border Style="{StaticResource Chip}" Margin="0,0,6,0"

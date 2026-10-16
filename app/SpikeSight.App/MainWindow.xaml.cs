@@ -39,7 +39,15 @@ public sealed record Row(
     Visibility SmurfVisible = Visibility.Collapsed,
     Visibility PartyVisible = Visibility.Collapsed,
     Visibility NoteVisible = Visibility.Collapsed,
-    Brush? NoteTint = null, Brush? PartyTint = null);
+    Brush? NoteTint = null, Brush? PartyTint = null,
+    string Kd = "", string Acs = "", string Ps = "")
+{
+    // The unit is drawn separately from the number, so it has to disappear
+    // with it - "ACS" sitting alone next to nothing reads as a broken row.
+    public Visibility FormVisible => Kd.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility AcsVisible => Acs.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+    public Visibility PsVisible => Ps.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+}
 
 public partial class MainWindow : Window
 {
@@ -340,6 +348,9 @@ public partial class MainWindow : Window
             RankTint: Swatch(RankColour(tier), Theme.IsLight ? (byte)0x30 : (byte)0x26,
                              derive: false),
             Form: Form(player),
+            Kd: player.Stats is { Matches: > 0 } k ? $"{k.Kd:F2}" : "",
+            Acs: player.Stats is { Matches: > 0, Acs: { } a } ? $"{a}" : "",
+            Ps: player.Stats is { Matches: > 0, Performance: { } ps } ? $"{ps}" : "",
             Smurf: player.Smurf is { Flagged: true } verdict ? $"SMURF {verdict.Score}" : "",
             Party: party is null
                 ? ""
