@@ -20,6 +20,20 @@ public static class AgentPool
     /// when the alternative is a blank panel during agent select.</summary>
     public const int MinGamesOnMap = 1;
 
+    /// <summary>Your win-loss across these matches.</summary>
+    public static (int Wins, int Losses) Record(IEnumerable<MatchSummary> matches, string puuid)
+    {
+        int wins = 0, losses = 0;
+        foreach (var match in matches)
+        {
+            var row = match.Players.FirstOrDefault(p => p.Puuid == puuid);
+            if (row is null) continue;
+            if (match.WonByTeam.TryGetValue(row.Team, out var won) && won) wins++;
+            else losses++;
+        }
+        return (wins, losses);
+    }
+
     public static List<AgentRecord> Best(
         IEnumerable<MatchSummary> matches, string puuid, string? mapId, int take = 3)
     {

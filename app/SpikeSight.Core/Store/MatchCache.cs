@@ -68,6 +68,33 @@ public sealed class MatchCache
         }
     }
 
+    /// <summary>
+    /// Every summary on disk, newest first.
+    ///
+    /// The cache holds opponents' matches as well as your own, so callers
+    /// filter by puuid. Cheap enough to read whole: these are a few KB each
+    /// and the alternative was asking Riot for a handful of match ids and
+    /// then only looking at those, which is how "your best on this map" came
+    /// to be computed from the last five games you played anywhere.
+    /// </summary>
+    public List<MatchSummary> All()
+    {
+        var summaries = new List<MatchSummary>();
+        try
+        {
+            foreach (var file in Directory.EnumerateFiles(_dir, "*.json"))
+            {
+                var id = Path.GetFileNameWithoutExtension(file);
+                if (Peek(id) is { } summary) summaries.Add(summary);
+            }
+        }
+        catch (IOException)
+        {
+            return [.. _memory.Values.OrderByDescending(s => s.StartedMs)];
+        }
+        return [.. summaries.OrderByDescending(s => s.StartedMs)];
+    }
+
     public int Count
     {
         get

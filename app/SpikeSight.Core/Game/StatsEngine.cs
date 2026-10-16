@@ -169,17 +169,19 @@ public sealed class StatsEngine(RemoteClient remote, MatchCache? cache = null)
     /// Cache only: the agent pool is a nicety shown during agent select, and
     /// it is not worth a single request to fill.
     /// </summary>
-    public async Task<List<MatchSummary>> CachedHistoryAsync(
-        string puuid, int count = 40, CancellationToken ct = default)
-    {
-        var summaries = new List<MatchSummary>();
-        foreach (var (matchId, _) in await ReadHistoryAsync(puuid, "", ct))
-        {
-            if (_cache.Peek(matchId) is { } summary) summaries.Add(summary);
-            if (summaries.Count >= count) break;
-        }
-        return summaries.OrderByDescending(s => s.StartedMs).ToList();
-    }
+    /// <summary>
+    /// Your own matches, from the cache alone - no request at all.
+    ///
+    /// It used to ask Riot for recent match ids first and then look only
+    /// those up, which capped it at <see cref="Depth"/> games however many
+    /// were on disk. During agent select that was both a request we did not
+    /// need and five games of evidence instead of hundreds.
+    /// </summary>
+    public List<MatchSummary> CachedHistory(string puuid, int count = 200)
+        => _cache.All()
+            .Where(s => s.Players.Any(p => p.Puuid == puuid))
+            .Take(count)
+            .ToList();
 
     /// <summary>One match summary, cached or fetched. Used by the history view.</summary>
     public Task<MatchSummary?> SummaryAsync(string matchId, CancellationToken ct = default)

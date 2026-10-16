@@ -98,4 +98,24 @@ public class AgentPoolTests
     [Fact]
     public void No_history_on_this_map_is_simply_empty()
         => Assert.Empty(AgentPool.Best([Match("1", "icebox", "viper", true)], "me", "ascent"));
+
+    [Fact]
+    public void Record_counts_only_your_own_rows()
+    {
+        // The cache holds opponents' matches too, so a summary you were not
+        // in must not count as a loss against you.
+        var theirs = new MatchSummary
+        {
+            MatchId = "x", MapId = "m", Completed = true,
+            WonByTeam = new Dictionary<string, bool> { ["Blue"] = true },
+            Players = [new MatchRow { Puuid = "someone", Team = "Blue", CharacterId = "jett" }],
+        };
+
+        var (wins, losses) = AgentPool.Record(
+            [Match("1", "m", "jett", won: true), Match("2", "m", "jett", won: false), theirs],
+            "me");
+
+        Assert.Equal(1, wins);
+        Assert.Equal(1, losses);
+    }
 }

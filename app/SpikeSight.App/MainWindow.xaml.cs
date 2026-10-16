@@ -210,7 +210,7 @@ public partial class MainWindow : Window
         {
             var side = board.Sides.First(s => s.Players.Count > 0);
             _overlay?.ShowLobby(board.MapName, side.Players.Select(RowFor).ToList(),
-                                _pool, _pool is { Count: > 0 } ? "your best here" : null);
+                                _pool, _poolHead);
             _ = LoadAgentPoolAsync(board.MapName);
         }
         else
@@ -562,6 +562,7 @@ public partial class MainWindow : Window
 
     private string? _releaseUrl;
     private List<PoolRow>? _pool;
+    private string _poolHead = "";
     private string _poolMap = "";
 
     /// <summary>
@@ -577,19 +578,34 @@ public partial class MainWindow : Window
 
         try
         {
-            var history = await stats.CachedHistoryAsync(poller.SelfPuuid, ct: _stopping.Token);
-            var mapId = history.Select(h => h.MapId)
-                .FirstOrDefault(id => GameContent.Bundled.MapName(id) == mapName);
+            var puuid = poller.SelfPuuid;
+            // Filtered by map name rather than id: the cache stores whichever
+            // identifier the payload used, and matching on the resolved name
+            // works for both. Matching on id used to miss, and a miss meant
+            // no filter at all - "your best here" showing your best anywhere.
+            var onMap = await Task.Run(
+                () => stats.CachedHistory(puuid)
+                           .Where(h => GameContent.Bundled.MapName(h.MapId) == mapName)
+                           .ToList(),
+                _stopping.Token);
 
-            var best = AgentPool.Best(history, poller.SelfPuuid, mapId);
-            _pool = best.Select(a => new PoolRow(
+            var (wins, losses) = AgentPool.Record(onMap, puuid);
+            _pool = AgentPool.Best(onMap, puuid, mapId: null).Select(a => new PoolRow(
                 GameContent.Bundled.AgentName(a.CharacterId) ?? "-",
                 $"{a.Wins}-{a.Losses}" + (a.Acs is { } acs ? $"  ·  {acs} ACS" : ""),
                 Portraits.For(a.CharacterId))).ToList();
+            _poolHead = onMap.Count == 0
+                ? $"no record on {mapName} yet"
+                : $"{mapName}  ·  {wins}-{losses}  ·  your best here";
+
+            // The panel is built after the overlay was already shown, so it
+            // has to put itself on screen or it waits for the next rescan.
+            _overlay?.SetPool(_pool, _poolHead);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _pool = null;   // a missing panel is better than a broken overlay
+            _poolHead = "";
         }
     }
 

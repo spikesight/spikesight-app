@@ -36,11 +36,22 @@ public partial class OverlayWindow : Window
         Heading.Text = heading.ToUpperInvariant();
         Rows.ItemsSource = rows;
 
-        PoolRows.ItemsSource = pool;
-        PoolHead.Text = (poolHeading ?? "").ToUpperInvariant();
-        PoolPanel.Visibility = pool is { Count: > 0 } ? Visibility.Visible : Visibility.Collapsed;
+        SetPool(pool, poolHeading);
 
         if (!IsVisible) Show();
+    }
+
+    /// <summary>
+    /// Fill the bottom panel on its own.
+    ///
+    /// Your record on this map is read from disk, so it arrives after the
+    /// lobby is already drawn rather than with it.
+    /// </summary>
+    public void SetPool(IReadOnlyList<PoolRow>? pool, string? heading)
+    {
+        PoolRows.ItemsSource = pool;
+        PoolHead.Text = (heading ?? "").ToUpperInvariant();
+        PoolPanel.Visibility = heading is { Length: > 0 } ? Visibility.Visible : Visibility.Collapsed;
     }
 
     public void HidePanel()
