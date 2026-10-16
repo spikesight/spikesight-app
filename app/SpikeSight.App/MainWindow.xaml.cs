@@ -31,7 +31,7 @@ public sealed record PoolRow(string Agent, string Record, ImageSource? Portrait)
 
 public sealed record Row(
     string Agent, string Name, string Rank, string Peak, string Level,
-    bool IsSelf, Brush NameBrush, Brush RankBrush,
+    bool IsSelf, Brush NameBrush, Brush RankBrush, Brush RankTint,
     string Form = "", string Smurf = "", string Party = "",
     string Puuid = "", string Note = "", string Met = "", Brush? NoteBrush = null,
     ImageSource? Portrait = null, Brush? PartyBrush = null, string Sub = "",
@@ -334,7 +334,11 @@ public partial class MainWindow : Window
             Level: player.Level?.ToString() ?? (player.LevelHidden ? "hidden" : "-"),
             IsSelf: player.IsSelf,
             NameBrush: (Brush)FindResource(player.Name.Hidden ? "OnMedium" : "OnHigh"),
-            RankBrush: Swatch(Theme.IsLight ? tier.LightColor : tier.Color, derive: false),
+            RankBrush: Swatch(RankColour(tier), derive: false),
+            // Darker fill on light, lighter on dark: the chip has to lift off
+            // the row either way, and the row is near-white in one theme.
+            RankTint: Swatch(RankColour(tier), Theme.IsLight ? (byte)0x30 : (byte)0x26,
+                             derive: false),
             Form: Form(player),
             Smurf: player.Smurf is { Flagged: true } verdict ? $"SMURF {verdict.Score}" : "",
             Party: party is null
@@ -354,6 +358,9 @@ public partial class MainWindow : Window
             NoteTint: NoteBrush(player.WorstNote, 0x26),
             PartyTint: Swatch(partyColour, 0x22));
     }
+
+    private static string RankColour(Tier tier)
+        => Theme.IsLight ? tier.LightColor : tier.Color;
 
     /// <summary>Severity colour, falling back to the theme's meta colour.</summary>
     private Brush NoteBrush(Severity? severity, byte alpha = 0xFF)
