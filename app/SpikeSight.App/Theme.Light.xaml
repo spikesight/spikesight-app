@@ -1,0 +1,35 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        Light mode: the neutrals only.
+
+        Merged over Theme.xaml at runtime, which is why every control that
+        uses one of these asks for it with DynamicResource. Mutating the dark
+        brushes in place would have been a smaller change, but WPF freezes the
+        Freezables in a compiled resource dictionary and re-freezes anything
+        put back into one, so they cannot be recoloured at all.
+
+        The accents - rank tiers, party rings, severity, win and loss - are
+        deliberately absent. They are mid-tone and saturated, they read on
+        either background, and a second set would be two palettes to keep
+        honest for no gain.
+    -->
+
+    <SolidColorBrush x:Key="Surface0" Color="#FFF4F6F9"/>  <!-- the window -->
+    <SolidColorBrush x:Key="Surface1" Color="#FFFFFFFF"/>  <!-- cards, rows -->
+    <SolidColorBrush x:Key="Surface2" Color="#FFEAEEF4"/>  <!-- raised, hover -->
+    <SolidColorBrush x:Key="Surface3" Color="#FFDCE3ED"/>  <!-- your own row -->
+    <SolidColorBrush x:Key="Outline"  Color="#FFD2D9E3"/>
+    <SolidColorBrush x:Key="OutlineSoft" Color="#FFE4E9F0"/>
+
+    <SolidColorBrush x:Key="OnHigh"   Color="#FF11151C"/>  <!-- names, values -->
+    <SolidColorBrush x:Key="OnMedium" Color="#FF4C5663"/>  <!-- supporting -->
+    <SolidColorBrush x:Key="OnLow"    Color="#FF6B7483"/>  <!-- labels, meta -->
+
+    <!-- The overlay sits over the game, so it keeps its own alpha rather
+         than borrowing an opaque surface. -->
+    <SolidColorBrush x:Key="OverlayBg"   Color="#F2F4F6F9"/>
+    <SolidColorBrush x:Key="OverlayEdge" Color="#33000000"/>
+    <SolidColorBrush x:Key="OverlayLine" Color="#1A000000"/>
+</ResourceDictionary>

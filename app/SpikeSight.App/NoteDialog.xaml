@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Flag player"
         Icon="Assets/spikesight.ico" Width="460" SizeToContent="Height"
-        Background="{StaticResource Surface0}" WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource Surface0}" WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize" ShowInTaskbar="False"
         TextOptions.TextFormattingMode="Ideal">
 
@@ -12,9 +12,9 @@
          and left the close box as the only way out. -->
     <Window.Resources>
         <Style TargetType="TextBox">
-            <Setter Property="Background" Value="{StaticResource Surface1}"/>
-            <Setter Property="Foreground" Value="{StaticResource OnHigh}"/>
-            <Setter Property="CaretBrush" Value="{StaticResource OnHigh}"/>
+            <Setter Property="Background" Value="{DynamicResource Surface1}"/>
+            <Setter Property="Foreground" Value="{DynamicResource OnHigh}"/>
+            <Setter Property="CaretBrush" Value="{DynamicResource OnHigh}"/>
             <Setter Property="SelectionBrush" Value="{StaticResource Primary}"/>
             <Setter Property="FontFamily" Value="{StaticResource Body}"/>
             <Setter Property="FontSize" Value="13"/>
@@ -24,7 +24,7 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="TextBox">
                         <Border Background="{TemplateBinding Background}" CornerRadius="6"
-                                BorderBrush="{StaticResource Outline}" BorderThickness="1"
+                                BorderBrush="{DynamicResource Outline}" BorderThickness="1"
                                 x:Name="Chrome">
                             <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"/>
                         </Border>
@@ -51,8 +51,8 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
                         <Border x:Name="Chip" CornerRadius="6" Padding="16,8" Margin="0,0,8,0"
-                                Background="{StaticResource Surface1}"
-                                BorderBrush="{StaticResource Outline}" BorderThickness="1">
+                                Background="{DynamicResource Surface1}"
+                                BorderBrush="{DynamicResource Outline}" BorderThickness="1">
                             <ContentPresenter HorizontalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>

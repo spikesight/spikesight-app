@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="SpikeSight"
         Icon="Assets/spikesight.ico" Height="720" Width="1040" MinWidth="880"
-        Background="{StaticResource Surface0}" ShowActivated="False"
+        Background="{DynamicResource Surface0}" ShowActivated="False"
         WindowStartupLocation="CenterScreen"
         TextOptions.TextFormattingMode="Ideal">
 
@@ -36,13 +36,13 @@
                 </Border.ContextMenu>
                 <Border.Style>
                     <Style TargetType="Border">
-                        <Setter Property="Background" Value="{StaticResource Surface1}"/>
+                        <Setter Property="Background" Value="{DynamicResource Surface1}"/>
                         <Style.Triggers>
                             <DataTrigger Binding="{Binding IsSelf}" Value="True">
-                                <Setter Property="Background" Value="{StaticResource Surface3}"/>
+                                <Setter Property="Background" Value="{DynamicResource Surface3}"/>
                             </DataTrigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="{StaticResource Surface2}"/>
+                                <Setter Property="Background" Value="{DynamicResource Surface2}"/>
                             </Trigger>
                         </Style.Triggers>
                     </Style>
@@ -59,7 +59,7 @@
                     </Grid.ColumnDefinitions>
 
                     <Grid Grid.Column="0" HorizontalAlignment="Left">
-                        <Ellipse Width="32" Height="32" Fill="{StaticResource Surface2}"/>
+                        <Ellipse Width="32" Height="32" Fill="{DynamicResource Surface2}"/>
                         <Ellipse Width="32" Height="32">
                             <Ellipse.Fill>
                                 <ImageBrush ImageSource="{Binding Portrait}" Stretch="UniformToFill"/>
@@ -147,7 +147,7 @@
             </StackPanel>
 
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                <Ellipse x:Name="ConnDot" Width="7" Height="7" Fill="{StaticResource OnLow}"
+                <Ellipse x:Name="ConnDot" Width="7" Height="7" Fill="{DynamicResource OnLow}"
                          Margin="0,0,10,0"/>
                 <Button x:Name="SettingsButton" Content="Settings" Style="{StaticResource Quiet}"
                         Click="ToggleSettings"/>
@@ -160,7 +160,8 @@
             <StackPanel>
                 <TextBlock Style="{StaticResource T.Label}" Text="SETTINGS" Margin="0,0,0,12"/>
                 <CheckBox x:Name="OptOverlay" Style="{StaticResource Option}"
-                          Content="Pre-match overlay over agent select" Click="SettingChanged"/>
+                          Content="Pre-match overlay over agent select (Ctrl+Alt+S to hide it)"
+                          Click="SettingChanged"/>
                 <CheckBox x:Name="OptDeepStats" Style="{StaticResource Option}"
                           Content="Fetch recent-match stats (K/D, ACS, Performance Score)"
                           Click="SettingChanged"/>
@@ -171,6 +172,8 @@
                           Click="SettingChanged"/>
                 <CheckBox x:Name="OptAutostart" Style="{StaticResource Option}"
                           Content="Start with Windows" Click="SettingChanged"/>
+                <CheckBox x:Name="OptLight" Style="{StaticResource Option}"
+                          Content="Light mode" Click="SettingChanged"/>
                 <CheckBox x:Name="OptDiagnostics" Style="{StaticResource Option}" Margin="0"
                           Content="Show the diagnostic panel (developer output)"
                           Click="SettingChanged"/>
@@ -215,7 +218,7 @@
                     BorderThickness="0,0,0,0" CornerRadius="7" Padding="14,10">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock x:Name="UpdateText" Style="{StaticResource T.Dense}"
-                               Foreground="{StaticResource OnHigh}"/>
+                               Foreground="{DynamicResource OnHigh}"/>
                     <TextBlock x:Name="UpdateLink" Style="{StaticResource T.Dense}"
                                Foreground="{StaticResource Primary}" FontWeight="SemiBold"
                                Margin="14,0,0,0" Cursor="Hand" Text="Open the release page"
@@ -232,7 +235,7 @@
                                 <TextBlock Style="{StaticResource T.Badge}" Text="{Binding Title}"
                                            Foreground="{Binding Edge}" Margin="0,1,12,0"/>
                                 <TextBlock Style="{StaticResource T.Dense}" Text="{Binding Text}"
-                                           Foreground="{StaticResource OnHigh}"
+                                           Foreground="{DynamicResource OnHigh}"
                                            TextTrimming="CharacterEllipsis"/>
                             </StackPanel>
                         </Border>
@@ -282,10 +285,10 @@
                         <Border Margin="0,0,0,2" Padding="12,10" CornerRadius="7">
                             <Border.Style>
                                 <Style TargetType="Border">
-                                    <Setter Property="Background" Value="{StaticResource Surface1}"/>
+                                    <Setter Property="Background" Value="{DynamicResource Surface1}"/>
                                     <Style.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="{StaticResource Surface2}"/>
+                                            <Setter Property="Background" Value="{DynamicResource Surface2}"/>
                                         </Trigger>
                                     </Style.Triggers>
                                 </Style>
@@ -301,7 +304,7 @@
                                 </Grid.ColumnDefinitions>
 
                                 <Grid Grid.Column="0" HorizontalAlignment="Left">
-                                    <Ellipse Width="32" Height="32" Fill="{StaticResource Surface2}"/>
+                                    <Ellipse Width="32" Height="32" Fill="{DynamicResource Surface2}"/>
                                     <Ellipse Width="32" Height="32">
                                         <Ellipse.Fill>
                                             <ImageBrush ImageSource="{Binding Portrait}"
@@ -356,10 +359,10 @@
                             </Border.ContextMenu>
                             <Border.Style>
                                 <Style TargetType="Border">
-                                    <Setter Property="Background" Value="{StaticResource Surface1}"/>
+                                    <Setter Property="Background" Value="{DynamicResource Surface1}"/>
                                     <Style.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="{StaticResource Surface2}"/>
+                                            <Setter Property="Background" Value="{DynamicResource Surface2}"/>
                                         </Trigger>
                                     </Style.Triggers>
                                 </Style>
@@ -391,7 +394,7 @@
                                 <StackPanel Grid.Column="2" Orientation="Horizontal"
                                             VerticalAlignment="Center">
                                     <TextBlock Style="{StaticResource T.Dense}"
-                                               Foreground="{StaticResource OnHigh}"
+                                               Foreground="{DynamicResource OnHigh}"
                                                Text="{Binding Met}"/>
                                     <TextBlock Style="{StaticResource T.Meta}" Margin="10,0,0,0"
                                                Text="{Binding Split}"/>
@@ -407,7 +410,7 @@
         </ScrollViewer>
 
         <TextBlock x:Name="Diagnostics" Grid.Row="5" Margin="0,14,0,0"
-                   FontFamily="Consolas" FontSize="11" Foreground="{StaticResource OnLow}"
+                   FontFamily="Consolas" FontSize="11" Foreground="{DynamicResource OnLow}"
                    TextWrapping="Wrap"/>
     </Grid>
 </Window>

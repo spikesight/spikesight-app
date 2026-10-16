@@ -3,6 +3,7 @@ using System.IO;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using SpikeSight.Core;
@@ -54,6 +55,9 @@ public partial class MainWindow : Window
     private string _lastState = "";
     private Board? _board;
     private bool _loggedForm;
+    private Snapshot? _lastSnapshot;
+    private bool _overlayMuted;
+    private Hotkey? _hotkey;
 
     private static readonly string LogPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -61,6 +65,9 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
+        // Before InitializeComponent: the brushes are shared objects, so
+        // recolouring them up front means nothing is ever drawn dark first.
+        Theme.Apply(UserSettings.Load().LightMode);
         InitializeComponent();
         FitToScreen();
         Loaded += (_, _) => Start();
@@ -126,6 +133,7 @@ public partial class MainWindow : Window
         // Who holds foreground now that our windows are up. If this still
         // names the game, nothing was taken.
         OpenLog();
+        Note($"theme: {(_settings.LightMode ? "light" : "dark")}");
 
         var foreground = Win32.ForegroundProcessId();
         var stolen = foreground == Environment.ProcessId;
@@ -153,6 +161,11 @@ public partial class MainWindow : Window
             show: () => Dispatcher.InvokeAsync(Reveal),
             quit: () => Dispatcher.InvokeAsync(() => { _reallyQuitting = true; Close(); }));
 
+        _hotkey = Hotkey.Register(new WindowInteropHelper(this).Handle, ToggleOverlay);
+        Note(_hotkey is null
+            ? $"{Hotkey.Description} is taken by something else; no overlay shortcut"
+            : $"{Hotkey.Description} toggles the overlay");
+
         ShowSettings();
         _ = CheckForUpdateAsync();
         _poller = new MatchPoller(_local)
@@ -170,6 +183,7 @@ public partial class MainWindow : Window
     private void Show(Snapshot snapshot)
     {
         ShowConnection(snapshot);
+        _lastSnapshot = snapshot;
 
         if (snapshot.Board is not { } board)
         {
@@ -177,6 +191,7 @@ public partial class MainWindow : Window
             Rows.ItemsSource = null;
             _overlay?.HidePanel();
             if (snapshot.State != _lastState) Note($"state: {snapshot.State} - {snapshot.Message}");
+            UpdateOverlay();
             _lastState = snapshot.State;
             _loggedForm = false;
             return;
@@ -204,19 +219,7 @@ public partial class MainWindow : Window
         ShowOdds(board);
         ShowAlerts(board);
 
-        // Agent select only. Once the match starts the panel has done its
-        // job, and leaving it up is just something drawn over the game.
-        if (_settings.OverlayEnabled && snapshot.State == "PREGAME" && !snapshot.Stale)
-        {
-            var side = board.Sides.First(s => s.Players.Count > 0);
-            _overlay?.ShowLobby(board.MapName, side.Players.Select(RowFor).ToList(),
-                                _pool, _poolHead);
-            _ = LoadAgentPoolAsync(board.MapName);
-        }
-        else
-        {
-            _overlay?.HidePanel();
-        }
+        UpdateOverlay();
 
         // The enriched pass republishes with the same state, so logging only
         // on a state change would miss recent form entirely - visible on
@@ -240,6 +243,40 @@ public partial class MainWindow : Window
                  + $"{(player.Smurf is { Flagged: true } v ? $"  SMURF {v.Score}" : "")}"
                  + $"{(player.Stats is { Matches: > 0 } st ? $"  {st.Kd:F2}kd {st.Acs}acs {st.Performance}ps" : "")}");
         }
+    }
+
+    /// <summary>
+    /// Agent select only. Once the match starts the panel has done its job,
+    /// and leaving it up is just something drawn over the game.
+    /// </summary>
+    private void UpdateOverlay()
+    {
+        if (_settings.OverlayEnabled && !_overlayMuted
+            && _lastSnapshot is { State: "PREGAME", Stale: false, Board: { } board })
+        {
+            var side = board.Sides.First(s => s.Players.Count > 0);
+            _overlay?.ShowLobby(board.MapName, side.Players.Select(RowFor).ToList(),
+                                _pool, _poolHead);
+            _ = LoadAgentPoolAsync(board.MapName);
+        }
+        else
+        {
+            _overlay?.HidePanel();
+        }
+    }
+
+    /// <summary>
+    /// Ctrl+Alt+S, pressed with the game in front.
+    ///
+    /// Muting only, never a way to force the panel up outside agent select:
+    /// it has nothing to say during a round, and drawing it anyway over a
+    /// live game is the behaviour this build exists to stop.
+    /// </summary>
+    private void ToggleOverlay()
+    {
+        _overlayMuted = !_overlayMuted;
+        UpdateOverlay();
+        Note($"overlay {(_overlayMuted ? "hidden" : "shown")} by {Hotkey.Description}");
     }
 
     /// <summary>
@@ -296,7 +333,7 @@ public partial class MainWindow : Window
             Peak: "",
             Level: player.Level?.ToString() ?? (player.LevelHidden ? "hidden" : "-"),
             IsSelf: player.IsSelf,
-            NameBrush: Swatch(player.Name.Hidden ? "#A9B2C1" : "#EDF0F5"),
+            NameBrush: (Brush)FindResource(player.Name.Hidden ? "OnMedium" : "OnHigh"),
             RankBrush: Swatch(tier.Color),
             Form: Form(player),
             Smurf: player.Smurf is { Flagged: true } verdict ? $"SMURF {verdict.Score}" : "",
@@ -306,7 +343,7 @@ public partial class MainWindow : Window
             Puuid: player.Puuid,
             Note: player.WorstNote?.ToString().ToUpperInvariant() ?? "",
             Met: "",
-            NoteBrush: Swatch(NoteColour(player.WorstNote)),
+            NoteBrush: NoteBrush(player.WorstNote),
             Portrait: Portraits.For(player.CharacterId),
             PartyBrush: Swatch(partyColour),
             Sub: sub,
@@ -314,8 +351,17 @@ public partial class MainWindow : Window
             SmurfVisible: player.Smurf is { Flagged: true } ? Visibility.Visible : Visibility.Collapsed,
             PartyVisible: party is null ? Visibility.Collapsed : Visibility.Visible,
             NoteVisible: player.WorstNote is null ? Visibility.Collapsed : Visibility.Visible,
-            NoteTint: Swatch(NoteColour(player.WorstNote), 0x26),
+            NoteTint: NoteBrush(player.WorstNote, 0x26),
             PartyTint: Swatch(partyColour, 0x22));
+    }
+
+    /// <summary>Severity colour, falling back to the theme's meta colour.</summary>
+    private Brush NoteBrush(Severity? severity, byte alpha = 0xFF)
+    {
+        var hex = NoteColour(severity);
+        if (hex.Length == 0)
+            return alpha == 0xFF ? (Brush)FindResource("OnLow") : Swatch("#788192", alpha);
+        return Swatch(hex, alpha);
     }
 
     private static string NoteColour(Severity? severity) => severity switch
@@ -323,7 +369,7 @@ public partial class MainWindow : Window
         Severity.Dodge => "#FF4655",
         Severity.Avoid => "#E8B04B",
         Severity.Watch => "#2FD4BE",
-        _ => "#788192",
+        _ => "",            // no flag: the ordinary meta colour
     };
 
     private void ShowOdds(Board board)
@@ -482,6 +528,7 @@ public partial class MainWindow : Window
         // Read from the registry rather than the settings file: that is where
         // the truth is, and somebody may have removed it by hand.
         OptAutostart.IsChecked = Autostart.IsEnabled();
+        OptLight.IsChecked = _settings.LightMode;
         OptDiagnostics.IsChecked = _settings.ShowDiagnostics;
         ApplyDiagnosticsVisibility();
     }
@@ -508,9 +555,18 @@ public partial class MainWindow : Window
             CloseToTray = OptCloseToTray.IsChecked == true,
             StartWithWindows = autostartOk && wanted,
             ShowDiagnostics = OptDiagnostics.IsChecked == true,
+            LightMode = OptLight.IsChecked == true,
         };
         _settings.Save();
         ApplyDiagnosticsVisibility();
+        if (Theme.IsLight != _settings.LightMode)
+        {
+            Theme.Apply(_settings.LightMode);
+            _tray?.Restyle();
+            // The rows pick their brushes in code, so they hold the old ones
+            // until something rebuilds them.
+            if (_lastSnapshot is { } last) Show(last);
+        }
 
         if (!autostartOk)
         {
@@ -669,13 +725,14 @@ public partial class MainWindow : Window
                 Rr: m.RrEarned is { } earned ? $"{(earned > 0 ? "+" : "")}{earned} RR" : "",
                 RankAfter: m.TierAfter is > 0 ? $"{Ranks.Of(m.TierAfter).Name} {m.RrAfter}" : "",
                 Portrait: Portraits.For(m.CharacterId),
-                ResultBrush: Swatch(m.Won switch
+                ResultBrush: m.Won switch
                 {
-                    true => "#2FB3A4",
-                    false => "#FF4655",
-                    _ => "#3A4150",
-                }),
-                RrBrush: Swatch(m.RrEarned is null ? "#6E7687" : m.RrEarned >= 0 ? "#2FB3A4" : "#FF4655")))
+                    true => Swatch("#2FB3A4"),
+                    false => Swatch("#FF4655"),
+                    _ => (Brush)FindResource("Outline"),
+                },
+                RrBrush: m.RrEarned is null ? (Brush)FindResource("OnLow")
+                    : Swatch(m.RrEarned >= 0 ? "#2FB3A4" : "#FF4655")))
                 .ToList();
 
             var s = career.Summary;
@@ -715,8 +772,8 @@ public partial class MainWindow : Window
             Code: p.RiotId is null ? "" : $"#{Privacy.HiddenTag(p.Puuid)}",
             CodeVisible: p.RiotId is null ? Visibility.Collapsed : Visibility.Visible,
             Note: p.WorstNote?.ToString().ToUpperInvariant() ?? "",
-            NoteBrush: Swatch(NoteColour(p.WorstNote)),
-            NoteTint: Swatch(NoteColour(p.WorstNote), 0x26),
+            NoteBrush: NoteBrush(p.WorstNote),
+            NoteTint: NoteBrush(p.WorstNote, 0x26),
             NoteVisible: p.WorstNote is null ? Visibility.Collapsed : Visibility.Visible,
             Met: p.Met == 1 ? "met once" : $"met {p.Met} times",
             Split: (p.LastAgent is { Length: > 0 } agent ? $"last as {agent}  ·  " : "")
@@ -740,13 +797,40 @@ public partial class MainWindow : Window
 
     /// <summary>A brush from a hex colour, optionally at a lower alpha for
     /// the soft fill behind a chip.</summary>
+    /// <summary>
+    /// An accent colour, legible on whichever background is behind it.
+    ///
+    /// The accents are picked for a dark window, and several of them - Silver,
+    /// Gold, Radiant - are pale enough to vanish on a light one. Darkening by
+    /// luminance keeps a single palette rather than a second one to maintain:
+    /// the hue is what identifies a rank, and the lightness is free.
+    /// </summary>
     private static Brush Swatch(string hex, byte alpha = 0xFF)
     {
         var colour = (Color)ColorConverter.ConvertFromString(hex);
+        if (Theme.IsLight) colour = Darkened(colour);
         if (alpha != 0xFF) colour = Color.FromArgb(alpha, colour.R, colour.G, colour.B);
         var brush = new SolidColorBrush(colour);
         brush.Freeze();
         return brush;
+    }
+
+    /// <summary>Scale a colour down until it is dark enough to read on white.</summary>
+    private static Color Darkened(Color colour)
+    {
+        // Rec. 709 luminance, which tracks what the eye calls bright far
+        // better than averaging the channels does.
+        static double Luminance(Color c) => (0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B) / 255.0;
+
+        const double Ceiling = 0.42;
+        var luminance = Luminance(colour);
+        if (luminance <= Ceiling) return colour;
+
+        var scale = Ceiling / luminance;
+        return Color.FromRgb(
+            (byte)Math.Round(colour.R * scale),
+            (byte)Math.Round(colour.G * scale),
+            (byte)Math.Round(colour.B * scale));
     }
 
     private static string ProcessName(uint pid)
@@ -773,6 +857,7 @@ public partial class MainWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         _stopping.Cancel();
+        _hotkey?.Dispose();
         _tray?.Dispose();
         _poller?.Dispose();
         _notes.Dispose();

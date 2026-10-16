@@ -41,6 +41,11 @@ public sealed record UserSettings
     [JsonPropertyName("showDiagnostics")]
     public bool ShowDiagnostics { get; init; }
 
+    /// <summary>Light instead of dark. Dark stays the default: this sits
+    /// beside a game that is dark, on a second monitor at night.</summary>
+    [JsonPropertyName("lightMode")]
+    public bool LightMode { get; init; }
+
     public Game.Settings ToGameSettings() => Game.Settings.Default with
     {
         SmurfDetectionEnabled = SmurfDetection,

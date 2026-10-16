@@ -12,7 +12,8 @@
          equivalent in the Python build was a browser window plus ctypes to
          undo everything the browser did to it. -->
     <Border CornerRadius="10" Margin="12" Padding="0"
-            Background="#F20E1116" BorderBrush="#33FFFFFF" BorderThickness="1">
+            Background="{DynamicResource OverlayBg}" BorderThickness="1"
+            BorderBrush="{DynamicResource OverlayEdge}">
         <Border.Effect>
             <DropShadowEffect BlurRadius="24" ShadowDepth="0" Opacity="0.6" Color="Black"/>
         </Border.Effect>
@@ -20,7 +21,7 @@
         <StackPanel>
             <!-- Heading carries the accent, so the panel reads as the app at
                  a glance over a busy agent-select screen. -->
-            <Border CornerRadius="10,10,0,0" Padding="14,10" Background="#1AFF4655">
+            <Border CornerRadius="10,10,0,0" Padding="14,10" Background="{StaticResource PrimaryWash}">
                 <Grid>
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="SPIKE" FontFamily="{StaticResource Display}"
@@ -28,11 +29,11 @@
                                    Foreground="{StaticResource Primary}"/>
                         <TextBlock Text="SIGHT" FontFamily="{StaticResource Display}"
                                    FontWeight="Bold" FontSize="14"
-                                   Foreground="{StaticResource OnHigh}"/>
+                                   Foreground="{DynamicResource OnHigh}"/>
                     </StackPanel>
                     <TextBlock x:Name="Heading" HorizontalAlignment="Right"
                                Style="{StaticResource T.Label}"
-                               Foreground="{StaticResource OnMedium}"/>
+                               Foreground="{DynamicResource OnMedium}"/>
                 </Grid>
             </Border>
 
@@ -47,7 +48,7 @@
                             </Grid.ColumnDefinitions>
 
                             <Grid Grid.Column="0" HorizontalAlignment="Left">
-                                <Ellipse Width="26" Height="26" Fill="#FF1C222C"/>
+                                <Ellipse Width="26" Height="26" Fill="{DynamicResource Surface2}"/>
                                 <Ellipse Width="26" Height="26">
                                     <Ellipse.Fill>
                                         <ImageBrush ImageSource="{Binding Portrait}"
@@ -73,7 +74,7 @@
                                                    Foreground="{Binding NoteBrush}"/>
                                     </Border>
                                     <Border CornerRadius="3" Padding="5,1" Margin="5,0,0,0"
-                                            Background="#26FF4655"
+                                            Background="{StaticResource PrimarySoft}"
                                             Visibility="{Binding SmurfVisible}">
                                         <TextBlock Text="SMURF" FontSize="10"
                                                    FontFamily="{StaticResource Display}"
@@ -83,7 +84,7 @@
                                 </StackPanel>
                                 <TextBlock Text="{Binding Form}" FontSize="11"
                                            FontFamily="{StaticResource Body}"
-                                           Foreground="{StaticResource OnLow}"
+                                           Foreground="{DynamicResource OnLow}"
                                            Margin="0,1,0,0"/>
                             </StackPanel>
 
@@ -99,7 +100,7 @@
             <!-- Your best agents here, which is the one thing you can still
                  act on while agent select is running. -->
             <Border x:Name="PoolPanel" Visibility="Collapsed" Padding="14,8,14,10"
-                    BorderBrush="#1AFFFFFF" BorderThickness="0,1,0,0">
+                    BorderBrush="{DynamicResource OverlayLine}" BorderThickness="0,1,0,0">
                 <StackPanel>
                     <TextBlock x:Name="PoolHead" Style="{StaticResource T.Label}"
                                Margin="0,0,0,6"/>
@@ -121,11 +122,11 @@
                                     </Ellipse>
                                     <TextBlock Grid.Column="1" Text="{Binding Agent}" FontSize="12"
                                                FontFamily="{StaticResource Body}"
-                                               Foreground="{StaticResource OnHigh}"
+                                               Foreground="{DynamicResource OnHigh}"
                                                VerticalAlignment="Center" Margin="4,0,0,0"/>
                                     <TextBlock Grid.Column="2" Text="{Binding Record}" FontSize="11"
                                                FontFamily="{StaticResource Body}"
-                                               Foreground="{StaticResource OnMedium}"
+                                               Foreground="{DynamicResource OnMedium}"
                                                VerticalAlignment="Center"/>
                                 </Grid>
                             </DataTemplate>
