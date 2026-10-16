@@ -822,7 +822,12 @@ public partial class MainWindow : Window
         // better than averaging the channels does.
         static double Luminance(Color c) => (0.2126 * c.R + 0.7152 * c.G + 0.0722 * c.B) / 255.0;
 
-        const double Ceiling = 0.42;
+        // Low enough for a 3px rank pip, not just for text. A mid-tone reads
+        // fine as a word on white and nearly vanishes as a thin bar of the
+        // same colour, because what is short there is area rather than
+        // contrast ratio - and the pip is the part meant to be recognised at
+        // a glance.
+        const double Ceiling = 0.30;
         var luminance = Luminance(colour);
         if (luminance <= Ceiling) return colour;
 
