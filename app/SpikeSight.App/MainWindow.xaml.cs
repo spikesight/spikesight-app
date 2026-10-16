@@ -169,6 +169,8 @@ public partial class MainWindow : Window
 
     private void Show(Snapshot snapshot)
     {
+        ShowConnection(snapshot);
+
         if (snapshot.Board is not { } board)
         {
             MatchLine.Text = snapshot.Message;
@@ -238,6 +240,25 @@ public partial class MainWindow : Window
                  + $"{(player.Smurf is { Flagged: true } v ? $"  SMURF {v.Score}" : "")}"
                  + $"{(player.Stats is { Matches: > 0 } st ? $"  {st.Kd:F2}kd {st.Acs}acs {st.Performance}ps" : "")}");
         }
+    }
+
+    /// <summary>
+    /// The dot beside Settings: are we actually talking to the client.
+    ///
+    /// It was drawn and then never touched, so it sat grey through a live
+    /// match - which reads as "broken" whether or not anything is.
+    /// </summary>
+    private void ShowConnection(Snapshot snapshot)
+    {
+        var (brush, what) = snapshot.State switch
+        {
+            "PREGAME" or "INGAME" => ("Positive", "Watching this lobby"),
+            "MENUS" => ("Secondary", "Connected - waiting for a match"),
+            "STARTING" => ("Warning", "Connecting to the Riot Client..."),
+            _ => ("OnLow", snapshot.Message.Length > 0 ? snapshot.Message : "Not connected"),
+        };
+        ConnDot.Fill = (Brush)FindResource(brush);
+        ConnDot.ToolTip = what;
     }
 
     /// <summary>A short summary for a team heading: how many, and how strong.</summary>

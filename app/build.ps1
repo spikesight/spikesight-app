@@ -16,7 +16,9 @@ $root = $PSScriptRoot
 $out = Join-Path $root "dist"
 $staging = Join-Path $out "SpikeSight"
 
-if (Get-Process SpikeSight.App -ErrorAction SilentlyContinue) {
+# Both names: a dev run is SpikeSight.App, but the packaged exe is renamed to
+# SpikeSight - and that is the one holding the staging folder open.
+if (Get-Process SpikeSight, SpikeSight.App -ErrorAction SilentlyContinue) {
     throw "SpikeSight is running; close it first or the build writes a stale binary."
 }
 
@@ -25,7 +27,9 @@ dotnet test (Join-Path $root "SpikeSight.sln") -c $Configuration --nologo -v q
 if ($LASTEXITCODE -ne 0) { throw "Tests failed; not packaging." }
 
 Write-Host "Publishing..."
-Remove-Item $staging -Recurse -Force -ErrorAction SilentlyContinue
+# Not SilentlyContinue: a staging folder that will not clear is usually the
+# last build still running, and quietly publishing over it ships a mix of two.
+if (Test-Path $staging) { Remove-Item $staging -Recurse -Force }
 dotnet publish (Join-Path $root "SpikeSight.App") `
     -c $Configuration -r win-x64 --self-contained true `
     -p:PublishSingleFile=true `
@@ -53,7 +57,7 @@ Your notes live in %LOCALAPPDATA%\SpikeSight and are not touched by deleting
 this folder.
 "@ | Set-Content (Join-Path $staging "READ ME FIRST.txt") -Encoding utf8
 
-Rename-Item (Join-Path $staging "SpikeSight.App.exe") "SpikeSight.exe"
+Move-Item (Join-Path $staging "SpikeSight.App.exe") (Join-Path $staging "SpikeSight.exe") -Force
 
 $zip = Join-Path $out "SpikeSight-$version-windows.zip"
 Remove-Item $zip -Force -ErrorAction SilentlyContinue
