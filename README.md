@@ -253,6 +253,15 @@ Run the tests:
 dotnet test
 ```
 
+There is a demo mode with invented data that makes no requests to Riot at
+all, and does not need the Riot Client running. It is what the screenshots
+above are taken from, and it keeps its notes in their own folder so it cannot
+touch your real ones:
+
+```powershell
+dotnet run --project SpikeSight.App -- --demo
+```
+
 To build the same single `.exe` the releases ship. It runs the tests first,
 and refuses to run while SpikeSight is open:
 

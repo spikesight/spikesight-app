@@ -5,9 +5,11 @@ namespace SpikeSight.App;
 
 public partial class App : Application
 {
-    private static readonly string CrashLog = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "SpikeSight", "v3-crash.log");
+    // A property for the same reason the preview log is one: demo mode moves
+    // the data directory, and a field would have captured the real path
+    // before that happened.
+    private static string CrashLog
+        => Path.Combine(SpikeSight.Core.Store.Paths.DataDir, "v3-crash.log");
 
     public App()
     {
@@ -42,6 +44,20 @@ public partial class App : Application
         {
             // Not being able to lower our own priority is not worth a word.
         }
+    }
+
+    protected override void OnStartup(StartupEventArgs e)
+    {
+        // Before any window, because MainWindow opens its notes database in a
+        // field initializer. Demo mode gets its own folder so a screenshot
+        // session cannot touch, and cannot be contaminated by, real flags.
+        if (e.Args.Contains("--demo", StringComparer.OrdinalIgnoreCase))
+        {
+            SpikeSight.Core.Store.Paths.DataDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "SpikeSight", "demo");
+        }
+        base.OnStartup(e);
     }
 
     private static void Record(string where, Exception? error)

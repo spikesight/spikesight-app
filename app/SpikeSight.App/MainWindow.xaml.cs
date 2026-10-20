@@ -64,12 +64,20 @@ public partial class MainWindow : Window
     private Board? _board;
     private bool _loggedForm;
     private Snapshot? _lastSnapshot;
+    private readonly bool _demo =
+        Environment.GetCommandLineArgs().Contains("--demo", StringComparer.OrdinalIgnoreCase);
     private bool _overlayMuted;
     private Hotkey? _hotkey;
 
-    private static readonly string LogPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "SpikeSight", "v3-preview.log");
+    /// <summary>
+    /// Beside the rest of our files, wherever those are.
+    ///
+    /// A property rather than a static field: demo mode moves the data
+    /// directory at startup, and a field initialised from the real path would
+    /// keep writing there - which is exactly what it did, quietly, while the
+    /// notes database was correctly isolated.
+    /// </summary>
+    private static string LogPath => Path.Combine(Paths.DataDir, "v3-preview.log");
 
     public MainWindow()
     {
@@ -83,13 +91,17 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// Open big enough to show a full lobby without scrolling, but never
-    /// bigger than the screen it is on. Ten players, two team headings and
-    /// the status line need about 860px; a laptop may not have it.
+    /// bigger than the screen it is on.
+    ///
+    /// Ten players, two team headings, the odds bar and the status line come
+    /// to about 960px - and both alert banners can be up at once, which is
+    /// the case the old 880 cap scrolled. A laptop still gets whatever the
+    /// work area allows.
     /// </summary>
     private void FitToScreen()
     {
         var work = SystemParameters.WorkArea;
-        Height = Math.Min(880, work.Height - 60);
+        Height = Math.Min(980, work.Height - 60);
         Width = Math.Min(1060, work.Width - 60);
     }
 
@@ -175,6 +187,13 @@ public partial class MainWindow : Window
             : $"{Hotkey.Description} toggles the overlay");
 
         ShowSettings();
+
+        if (_demo)
+        {
+            StartDemo();
+            return;
+        }
+
         _ = CheckForUpdateAsync();
         _poller = new MatchPoller(_local)
         {
@@ -251,6 +270,28 @@ public partial class MainWindow : Window
                  + $"{(player.Smurf is { Flagged: true } v ? $"  SMURF {v.Score}" : "")}"
                  + $"{(player.Stats is { Matches: > 0 } st ? $"  {st.Kd:F2}kd {st.Acs}acs {st.Performance}ps" : "")}");
         }
+    }
+
+    /// <summary>
+    /// A made-up lobby, and no Riot Client at all.
+    ///
+    /// Nothing below this starts: no poller, no local client, no requests.
+    /// The window is drawing invented data, which is what makes it safe to
+    /// photograph - the alternative is publishing ten real players' ranks.
+    /// </summary>
+    private void StartDemo()
+    {
+        Note("demo mode: invented data, nothing is read from the Riot Client");
+        var (heading, best) = Demo.Pool();
+        _poolMap = "Lotus";
+        _poolHead = heading;
+        _pool = best.Select(a => new PoolRow(
+            GameContent.Bundled.AgentName(a.CharacterId) ?? "-",
+            $"{a.Wins}-{a.Losses}" + (a.Acs is { } acs ? $"  ·  {acs} ACS" : ""),
+            Portraits.For(a.CharacterId))).ToList();
+
+        Show(new Snapshot("PREGAME", Demo.Lobby(), ""));
+        _ = Demo.SeedAsync(_notes, _stopping.Token);
     }
 
     /// <summary>
@@ -708,17 +749,35 @@ public partial class MainWindow : Window
         if (sender is not RadioButton { Tag: string view } || !IsLoaded) return;
 
         LobbyPanel.Visibility = view == "lobby" ? Visibility.Visible : Visibility.Collapsed;
-        // The status line and odds belong to the lobby, not the other views.
-        StatusRow.Visibility = Visibility.Visible;
+
+        // The odds bar and the alerts are about the lobby on screen, so they
+        // have no meaning beside your own history or your encounter list -
+        // and left up there they look like they describe what is below them.
+        // The status line itself stays: every view writes its own summary to
+        // it. This is what the comment here used to claim and the code did
+        // not do.
+        var lobby = view == "lobby";
+        OddsRow.Visibility = lobby && _lastSnapshot?.Board?.WinProbability is not null
+            ? Visibility.Visible : Visibility.Collapsed;
+        Alerts.Visibility = lobby ? Visibility.Visible : Visibility.Collapsed;
+        // The caption under the status line explains the odds, so it belongs
+        // to them rather than to whichever view is up.
+        MatchSub.Visibility = OddsRow.Visibility;
         HistoryView.Visibility = view == "history" ? Visibility.Visible : Visibility.Collapsed;
         MetView.Visibility = view == "met" ? Visibility.Visible : Visibility.Collapsed;
 
         if (view == "history") await LoadHistoryAsync();
         if (view == "met") await LoadMetAsync();
+        // Coming back to the lobby, the status line still reads whatever the
+        // last view wrote there. Live, the next poll overwrites it within a
+        // couple of seconds; with a board that is not moving, it never does.
+        if (lobby && _lastSnapshot is { } last) Show(last);
     }
 
     private async Task LoadHistoryAsync()
     {
+        if (_demo) { ShowCareer(Demo.History()); return; }
+
         MatchLine.Text = "Reading your recent matches...";
         try
         {
@@ -728,10 +787,18 @@ public partial class MainWindow : Window
                 return;
             }
 
-            var career = await CareerBuilder.BuildAsync(
+            ShowCareer(await CareerBuilder.BuildAsync(
                 remote, stats, GameContent.Bundled, _poller.SelfPuuid,
-                _poller.CurrentActId, ct: _stopping.Token);
+                _poller.CurrentActId, ct: _stopping.Token));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            MatchLine.Text = $"Could not read your history: {ex.Message}";
+        }
+    }
 
+    private void ShowCareer(Career career)
+    {
             HistoryRows.ItemsSource = career.Matches.Select(m => new HistoryRow(
                 Map: m.Map,
                 Queue: m.Queue.Length > 0 ? m.Queue : "-",
@@ -741,7 +808,8 @@ public partial class MainWindow : Window
                 Kda: m.Kills is null ? "-" : $"{m.Kills}/{m.Deaths}/{m.Assists}",
                 Form: Parts(m),
                 Rr: m.RrEarned is { } earned ? $"{(earned > 0 ? "+" : "")}{earned} RR" : "",
-                RankAfter: m.TierAfter is > 0 ? $"{Ranks.Of(m.TierAfter).Name} {m.RrAfter}" : "",
+                RankAfter: m.TierAfter is > 0
+                    ? $"{Ranks.Of(m.TierAfter).Name}  ·  {m.RrAfter}" : "",
                 Portrait: Portraits.For(m.CharacterId),
                 ResultBrush: m.Won switch
                 {
@@ -760,11 +828,6 @@ public partial class MainWindow : Window
                              + (s.Acs is { } acs ? $"   {acs} ACS" : "")
                              + (s.Performance is { } ps ? $"   {ps} PS" : "")
                              + (s.NetRr is { } rr ? $"   {(rr > 0 ? "+" : "")}{rr} RR" : "");
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            MatchLine.Text = $"Could not read your history: {ex.Message}";
-        }
     }
 
     private static string Parts(CareerMatch match)
@@ -778,7 +841,9 @@ public partial class MainWindow : Window
 
     private async Task LoadMetAsync()
     {
-        MatchLine.Text = "Reading who you have played with...";
+        MatchLine.Text = _demo
+            ? "Everyone you have played with."
+            : "Reading who you have played with...";
         var people = await _notes.RecentPlayersAsync(ct: _stopping.Token);
 
         MetRows.ItemsSource = people.Select(p => new MetRow(
@@ -853,8 +918,13 @@ public partial class MainWindow : Window
         var luminance = Luminance(colour);
         if (luminance <= Ceiling) return colour;
 
+        // FromArgb, not FromRgb: several of these colours arrive with their
+        // alpha already in the hex - the alert tints are #22FF4655 and the
+        // like - and dropping it turned a wash into a solid block with its
+        // own label invisible on top of it.
         var scale = Ceiling / luminance;
-        return Color.FromRgb(
+        return Color.FromArgb(
+            colour.A,
             (byte)Math.Round(colour.R * scale),
             (byte)Math.Round(colour.G * scale),
             (byte)Math.Round(colour.B * scale));
