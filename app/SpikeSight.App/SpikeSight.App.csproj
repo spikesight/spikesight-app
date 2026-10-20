@@ -13,7 +13,7 @@
     <!-- For NotifyIcon: the tray icon ships with the framework, so this
          costs a reference rather than a dependency. -->
     <UseWindowsForms>true</UseWindowsForms>
-    <Version>3.0.0-preview</Version>
+    <Version>3.0.1-preview</Version>
     <AssemblyTitle>SpikeSight</AssemblyTitle>
     <Product>SpikeSight</Product>
     <!-- The .exe's own icon: what Explorer, the taskbar and alt-tab show,

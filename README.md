@@ -221,7 +221,7 @@ playing in exclusive fullscreen, is the fix.
 Releases include a `SHA256SUMS.txt`. Check the file you downloaded matches:
 
 ```powershell
-Get-FileHash .\SpikeSight-3.0.0-preview-windows.zip -Algorithm SHA256
+Get-FileHash .\SpikeSight-*-windows.zip -Algorithm SHA256
 ```
 
 Every release is also scanned by [VirusTotal](https://www.virustotal.com); the
