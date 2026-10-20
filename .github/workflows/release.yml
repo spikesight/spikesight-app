@@ -7,7 +7,11 @@
 # stronger answer to "is this safe" than a virus scan, which can only say that
 # nothing recognised it.
 #
-# Tag a release to run it:  git tag v2.0.1 && git push origin v2.0.1
+# It runs app/build.ps1 rather than its own publish command, so the file
+# people download is built the same way as the one built on a desk. Two
+# recipes for one artifact is how they drift.
+#
+# Tag a release to run it:  git tag v3.0.0-preview && git push origin v3.0.0-preview
 
 name: Release
 
@@ -28,33 +32,41 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-dotnet@v4
         with:
-          python-version: "3.11"
+          dotnet-version: "8.0.x"
 
-      - name: Install dependencies
+      # The tag names the release; the csproj names the file inside it. If
+      # they disagree, the download is called something the release is not.
+      - name: Check the tag matches the project version
+        shell: pwsh
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt pyinstaller
+          $csproj = 'app/SpikeSight.App/SpikeSight.App.csproj'
+          $version = ([xml](Get-Content $csproj)).Project.PropertyGroup.Version |
+                     Where-Object { $_ }
+          $tag = $env:GITHUB_REF_NAME -replace '^v', ''
+          if ($tag -ne $version) {
+            throw "Tag $env:GITHUB_REF_NAME says $tag, $csproj says $version."
+          }
+          "Both say $version."
 
-      - name: Run the tests
-        run: python -m unittest discover tests
-
+      # Runs the tests itself and refuses to package if they fail.
       - name: Build
-        run: python tools/build_exe.py
+        shell: pwsh
+        run: .\app\build.ps1
 
       - name: Attest that this workflow built these files
         uses: actions/attest-build-provenance@v1
         with:
-          subject-path: dist/SpikeSight-*-windows.zip
+          subject-path: app/dist/SpikeSight-*-windows.zip
 
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          $zip = (Get-ChildItem dist/SpikeSight-*-windows.zip)[0]
-          $sum = (Get-Content dist/SHA256SUMS.txt).Split(' ')[0]
+          $zip = (Get-ChildItem app/dist/SpikeSight-*-windows.zip)[0]
+          $sum = (Get-Content app/dist/SHA256SUMS.txt).Split(' ')[0]
           $notes = @"
           ### Verifying this download
 
@@ -71,5 +83,10 @@ jobs:
           gh attestation verify .\$($zip.Name) --repo $env:GITHUB_REPOSITORY
           ``````
           "@
-          gh release create $env:GITHUB_REF_NAME $zip dist/SHA256SUMS.txt `
-            --title $env:GITHUB_REF_NAME --notes $notes
+          $release = @($env:GITHUB_REF_NAME, $zip, 'app/dist/SHA256SUMS.txt',
+                    '--title', $env:GITHUB_REF_NAME, '--notes', $notes)
+          # Anything with a suffix - preview, rc, beta - is not a final
+          # release. Appended to the array rather than passed as a variable
+          # that might be empty, which gh would see as a blank argument.
+          if ($env:GITHUB_REF_NAME -match '-') { $release += '--prerelease' }
+          gh release create @release
