@@ -67,7 +67,16 @@ jobs:
         run: |
           $zip = (Get-ChildItem app/dist/SpikeSight-*-windows.zip)[0]
           $sum = (Get-Content app/dist/SHA256SUMS.txt).Split(' ')[0]
+
+          # What changed, if this release has anything to say. Kept in the
+          # repo rather than in this file so the workflow stays the same
+          # shape for every release.
+          $whatsNew = ''
+          $file = "docs/release-notes/$env:GITHUB_REF_NAME.md"
+          if (Test-Path $file) { $whatsNew = (Get-Content $file -Raw -Encoding utf8) + "`n---`n" }
+
           $notes = @"
+          $whatsNew
           ### Verifying this download
 
           ``````
